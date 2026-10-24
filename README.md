@@ -15,6 +15,7 @@ context drift or hallucination.
 ## Table of Contents
 
 1. [Core Philosophy & Architecture](#core-philosophy--architecture)
+   - [Starting from Scratch: Rough Ideas & Placeholders Guide](STARTING_FROM_SCRATCH.md)
 2. [Project Directory Layout](#project-directory-layout)
 3. [The Five-Stage Novel Writing Pipeline](#the-five-stage-novel-writing-pipeline)
    - [Stage 1: Seed Synopsis & Interactive Discovery Interview (`novel-init`)](#stage-1-seed-synopsis--interactive-discovery-interview-novel-init)
@@ -181,6 +182,9 @@ sequenceDiagram
 
 Every novel begins with a high-level synopsis written by the author in `story/synopsis.md` (anything
 from a single paragraph to several pages).
+
+> [!TIP]
+> **Starting from a rough, unresearched idea with placeholders?** Read the step-by-step guide: [**Starting from Scratch: From a Rough Idea to a Spec-Driven Novel**](STARTING_FROM_SCRATCH.md) to learn how to use functional placeholders (`[...]`), Stable Identity Decoupling, and research backlogs before committing to character names, historical details, or period physics.
 
 When the author prompts `novel-init`, the agent executes an **interactive, agent-led discovery interview**:
 1. **Reflection**: The agent reflects its understanding of the premise, protagonist, setting eras, and central conflict.
