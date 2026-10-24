@@ -138,12 +138,12 @@ my-novel/
 sequenceDiagram
     autonumber
     actor Author
-    participant Agent as AI Agent
-    participant Specs as story/ & kb/
-    participant Outline as outline/
-    participant Abridged as abridged/
-    participant Manuscript as manuscript/
-    participant Git as Git Baseline
+    participant Agent as "AI Agent"
+    participant Specs as "story/ & kb/"
+    participant Outline as "outline/"
+    participant Abridged as "abridged/"
+    participant Manuscript as "manuscript/"
+    participant Git as "Git Baseline"
 
     Note over Author,Git: Stage 1: Seed & Interview
     Author->>Specs: Writes seed in story/synopsis.md
@@ -159,7 +159,7 @@ sequenceDiagram
 
     Note over Author,Git: Stage 3: High-Level Outline
     Author->>Agent: Runs novel-outline
-    Agent->>Outline: Builds skeleton in reading order (PRT > CHP > SCN) cross-referencing KB
+    Agent->>Outline: Builds skeleton in reading order (PRT to CHP to SCN) cross-referencing KB
     Author->>Outline: Reviews & approves outline structure
 
     Note over Author,Git: Stage 4: Intermediate Abridged Novel
@@ -169,7 +169,7 @@ sequenceDiagram
 
     Note over Author,Git: Stage 5: Final Prose Rendering
     Author->>Agent: Runs novel-write (or novel-sync)
-    Agent->>Manuscript: Renders full prose from abridged/ + story/style.md + kb/
+    Agent->>Manuscript: Renders full prose from abridged/, story/style.md, and kb/
     Agent->>Agent: Runs specnovel.py check (audits continuity & integrity)
     Author->>Manuscript: Reviews finished chapters; approves manuscript baseline
     Agent->>Git: Commits novel-sync(abridged, manuscript)

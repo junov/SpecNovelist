@@ -41,8 +41,8 @@ sequenceDiagram
     autonumber
     actor Author
     participant Agent as Agent (novel-init)
-    participant Story as story/
-    participant KB as kb/
+    participant Story as "story/"
+    participant KB as "kb/"
     Author->>Agent: Synopsis (in story/synopsis.md or pasted in chat)
     Agent->>Story: Save synopsis verbatim (if pasted)
     Agent->>Author: Reflect understanding + gaps
