@@ -80,11 +80,15 @@ For each target scene (`SCN-xxx`):
    - `FCT`: Sourced textures, period-accurate objects, specialized vocabulary, procedures.
    - `WLD`: Physical constraints of speculative rules.
 4. **Target word count**: Check the scene's target word count in `outline/` (or via `specnovel.py stats`).
+5. **Read active editorial directives**: Run `specnovel.py feedback SCN-xxx` (or inspect `story/editorial/`)
+   to retrieve all open `EDT` directives targeting this scene, its enclosing chapter, or global scope.
 
 ### 4. Synthesize the Manuscript Scene
 Draft the prose under `manuscript/CHP-xxx.md`:
 - **Preserve 100% of the Plot and Dialogue**: Retain all dialogue lines from the abridged draft,
   enriching beats with physical action, micro-expressions, pauses, and subtext.
+- **Enforce Active Editorial Directives**: Address every open `EDT` directive retrieved for this scene,
+  refining character reactions, prose texture, or blocking exactly as directed.
 - **Clarify Time and Space Transitions**: Leverage the Time and Place metadata from advanced `PLT`
   items (alongside scene `When:` and `Where:`) to anchor the reader. Explicitly render temporal distance
   (hours, days, seasons elapsed), journey physicalities (fatigue, soot, distance traveled), and the

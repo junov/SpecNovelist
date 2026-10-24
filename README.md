@@ -100,7 +100,8 @@ my-novel/
 ├── story/                      # HUMAN-OWNED INPUTS & SPECIFICATIONS
 │   ├── synopsis.md             # The seed synopsis (human-owned; never edited without permission)
 │   ├── brief.md                # Discovery interview decisions: premise, genre, length, settings, rigor
-│   └── style.md                # BINDING writing-style guide (voice, rhythm, POV, anti-patterns)
+│   ├── style.md                # BINDING writing-style guide (voice, rhythm, POV, anti-patterns)
+│   └── editorial/              # EDT: Editorial feedback directives (target, stage, status, issue, directive)
 ├── kb/                         # THE KNOWLEDGE BASE (Cataloged & Cross-Referenced)
 │   ├── characters/             # CHR: Characters (fictional & real; voice, arc, continuity)
 │   ├── places/                 # PLC: Settings & locations (layouts, sensory palettes)
@@ -359,6 +360,33 @@ flowchart LR
    Novel-Manuscript-Updated: SCN-014
    ```
 
+### Editorial Feedback & Directive Database (`EDT`)
+When an author or editor provides direct feedback on intermediate artifacts (`outline/`, `abridged/`) or final drafts (`manuscript/`), SpecNovelist routes it according to a three-tier triage process:
+1. **Systemic Promotion (Source Material First)**:
+   - Voice, diction, and anti-pattern feedback promotes directly into `story/style.md`.
+   - Character traits, speech mannerisms, setting details, and facts promote directly into `kb/` (`CHR`, `PLC`, `FCT`).
+   - Plot beats, sequence, and dialogues promote directly into `outline/`.
+2. **The Editorial Database (`story/editorial/`)**:
+   - Feedback that is local, situational, scene-specific, or micro-level blocking that does not belong in global rules is cataloged as an **Editorial Directive (`EDT-NNN`)**:
+     ```markdown
+     # EDT-001: Tone down Elena's panic during stokehold confrontation
+     - **Target:** [[SCN-014]]
+     - **Stage:** manuscript
+     - **Status:** open
+
+     ## Issue
+     Elena appears too frail and hysterical; she is a clinical physician.
+
+     ## Directive
+     - Eliminate trembling hands and ragged breathing after the steward retreats.
+     - Focus interiority on diagnostic observation (engine RPM drop, steam gauge vibration).
+     - Keep dialogue lines, but alter delivery to quiet, clipped precision.
+     ```
+3. **Automated Impact & Regression Prevention**:
+   - `specnovel.py impact` automatically flags any scene targeted by an `open` editorial directive, cueing `novel-sync` to re-render it.
+   - When `novel-write` or `novel-abridge` renders a scene, it queries active directives (`specnovel.py feedback SCN-xxx`) and strictly incorporates them.
+   - Once approved, the directive's status is set to `applied`, preserving a permanent record that ensures the feedback is never forgotten during future re-renders.
+
 ---
 
 ## Continuity, Fact Verification & Drift Detection (`novel-verify`)
@@ -440,6 +468,7 @@ zero external dependencies and interacts directly with Git.
 | `delta` | Displays ID-level additions, modifications, and deletions in the plan vs. baseline. | `python scripts/specnovel.py delta --stage plan` |
 | `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
 | `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers. | `python scripts/specnovel.py accept --stage abridged -m "msg"` |
+| `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene or status). | `python scripts/specnovel.py feedback [SCN-xxx]` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
 | `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
 | `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF). | `python scripts/specnovel.py compile --format epub` |

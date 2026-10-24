@@ -335,6 +335,56 @@ class ProjectTest(unittest.TestCase):
         _, res = self.json_cli("check")
         self.assertEqual(res["errors"], [])
 
+    def test_edt_validation_and_feedback_cli(self):
+        edt = """\
+# EDT-001: Tone down Elena's panic
+- **Target:** [[SCN-001]]
+- **Stage:** manuscript
+- **Status:** open
+
+## Issue
+Elena appears too frail.
+
+## Directive
+Make her colder and more diagnostic.
+"""
+        self.write("story/editorial/EDT-001.md", edt)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertTrue(any("1 open editorial directive(s)" in info for info in res["infos"]))
+
+        # CLI feedback list
+        code, fb_list = self.json_cli("feedback")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(fb_list), 1)
+        self.assertEqual(fb_list[0]["id"], "EDT-001")
+
+        # Impact should flag SCN-001 for manuscript stage
+        code, imp = self.json_cli("impact", "--stage", "manuscript")
+        self.assertEqual(code, 0)
+        flagged = next((s for s in imp["scenes"] if s["id"] == "SCN-001"), None)
+        self.assertIsNotNone(flagged)
+        self.assertTrue(any("open editorial directive EDT-001" in r for r in flagged["reasons"]))
+
+        # Impact for abridged stage should NOT flag SCN-001 because stage is manuscript
+        code, imp_ab = self.json_cli("impact", "--stage", "abridged")
+        flagged_ab = next((s for s in imp_ab["scenes"] if s["id"] == "SCN-001"), None)
+        if flagged_ab:
+            self.assertFalse(any("open editorial directive EDT-001" in r for r in flagged_ab["reasons"]))
+
+    def test_edt_dangling_target_and_invalid_fields(self):
+        self.write("story/editorial/EDT-002.md", """\
+# EDT-002: Bad directive
+- **Target:** [[SCN-999]]
+- **Stage:** invalid_stage
+- **Status:** invalid_status
+""")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("dangling reference [[SCN-999]]" in e for e in res["errors"]))
+        self.assertTrue(any("invalid or missing 'Stage:'" in e for e in res["errors"]))
+        self.assertTrue(any("invalid or missing 'Status:'" in e for e in res["errors"]))
+
 
 if __name__ == "__main__":
     unittest.main()

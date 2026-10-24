@@ -56,6 +56,8 @@ python scripts/specnovel.py status
 python scripts/specnovel.py impact --stage abridged
 python scripts/specnovel.py impact --stage manuscript
 ```
+- `specnovel.py impact` automatically flags scenes with pending upstream spec edits as well as
+  scenes with active, open editorial directives (`EDT`) in `story/editorial/`.
 - If duplicate IDs, dangling references, or unnested scenes exist, resolve them before proceeding.
 - If code drift exists in `abridged/` or `manuscript/` from manual edits outside a sync, review those
   changes so intentional modifications are incorporated or preserved.
@@ -116,6 +118,9 @@ Ask the author to review and approve the text.
 
 ### 8. Accept the Synchronization
 Once the author approves and all integrity checks pass:
+- If this synchronization resolved open editorial directives (`EDT`), update their `Status:` to `applied`
+  and record the commit baseline in `Resolution:`.
+- Commit the baseline:
 ```bash
 python scripts/specnovel.py accept --stage manuscript -m "Sync manuscript: <summary>"
 ```

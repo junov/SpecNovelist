@@ -84,6 +84,7 @@ TYPES: "OrderedDict[str, str]" = OrderedDict([
     ("CHR", "character"), ("PLC", "place"), ("ORG", "organization"), ("OBJ", "object"),
     ("PLT", "plot element"), ("THM", "theme"), ("WLD", "world rule"), ("TML", "timeline event"),
     ("FCT", "fact"), ("SRC", "source"), ("RQ", "research question"), ("STY", "style rule"),
+    ("EDT", "editorial directive"),
     ("PRT", "part"), ("CHP", "chapter"), ("SCN", "scene"),
 ])
 # KB item types that are expected to be referenced from the outline (unused ones are reported).
@@ -713,6 +714,26 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
         if not place_val or (place_val.startswith("<") and place_val.endswith(">")) or place_val.lower() in {"todo", "tbd", "unspecified", "none"}:
             errors.append(f"plot element {s.id} is missing valid place metadata (e.g. 'Place:' or 'Where:') ({s.location})")
 
+    # editorial feedback validation
+    valid_edt_stages = {"outline", "abridged", "manuscript", "all"}
+    valid_edt_statuses = {"open", "applied", "superseded", "wontfix"}
+    open_edts: List[Section] = []
+    for s in plan.of_type("EDT"):
+        target_val = (s.field_value("target") or "").strip()
+        if not target_val or (target_val.startswith("<") and target_val.endswith(">")):
+            errors.append(f"editorial directive {s.id} lacks a valid 'Target:' field ({s.location})")
+        stage_val = (s.field_value("stage") or "").lower()
+        if not stage_val or stage_val not in valid_edt_stages:
+            errors.append(f"editorial directive {s.id} has invalid or missing 'Stage:' ({stage_val or 'none'}); must be one of {', '.join(sorted(valid_edt_stages))} ({s.location})")
+        status_val = (s.field_value("status") or "").lower()
+        if not status_val or status_val not in valid_edt_statuses:
+            errors.append(f"editorial directive {s.id} has invalid or missing 'Status:' ({status_val or 'none'}); must be one of {', '.join(sorted(valid_edt_statuses))} ({s.location})")
+        elif status_val == "open":
+            open_edts.append(s)
+
+    if open_edts:
+        infos.append(f"{len(open_edts)} open editorial directive(s): " + ", ".join(s.id for s in open_edts))
+
     # usage
     outline_refs: Set[str] = set()
     for s in plan.sections():
@@ -821,6 +842,29 @@ def compute_impact(p: Project, stage: str) -> dict:
     ab_old = derived_of(build_model(git.commit_md(base, ABRIDGED))) if stage == "manuscript" else None
     ab_now = p.layers["abridged"]
 
+    # Open editorial directives for this stage
+    edt_reasons_by_scene: Dict[str, List[str]] = {}
+    global_edt_notes: List[str] = []
+    for edt in plan.of_type("EDT"):
+        if (edt.field_value("status") or "").lower() != "open":
+            continue
+        edt_stage = (edt.field_value("stage") or "").lower()
+        if edt_stage != "all" and edt_stage != stage:
+            continue
+        target_val = (edt.field_value("target") or "").strip()
+        if "global" in target_val.lower():
+            global_edt_notes.append(f"open editorial directive {edt.id}: {edt.title}")
+            continue
+        targeted_sids: Set[str] = set()
+        for ref_id in edt.ref_ids():
+            if ref_id in o.scenes:
+                targeted_sids.add(ref_id)
+            elif ref_id in o.chapters:
+                for sid in o.by_chapter.get(ref_id, []):
+                    targeted_sids.add(sid)
+        for sid in targeted_sids:
+            edt_reasons_by_scene.setdefault(sid, []).append(f"open editorial directive {edt.id}: {edt.title}")
+
     scenes = []
     for sid in o.scenes:
         reasons: List[str] = []
@@ -846,13 +890,15 @@ def compute_impact(p: Project, stage: str) -> dict:
                 reasons.append("references changed " + ", ".join(hits))
             if sid in old_o.chapter_of and old_o.chapter_of[sid] != cid:
                 reasons.append(f"moved from {old_o.chapter_of[sid]} to {cid}")
+        if sid in edt_reasons_by_scene:
+            reasons.extend(edt_reasons_by_scene[sid])
         if stage == "manuscript" and sid not in ab_now.scenes:
             reasons.append("blocked: abridged scene missing")
         if reasons:
             scenes.append({"id": sid, "chapter": cid, "title": plan.defs[sid].title, "reasons": reasons})
 
     removed = [sid for sid in target.scenes if sid not in o.chapter_of]
-    global_notes = []
+    global_notes = list(global_edt_notes)
     for c in changes:
         if c.id:
             continue
@@ -923,7 +969,7 @@ def cmd_init(root: Path, args) -> int:
                     print(f"created  {rel.as_posix()}")
     else:
         print(f"warning: templates not found at {templates}", file=sys.stderr)
-    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + [OUTLINE, ABRIDGED, MANUSCRIPT]:
+    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + ["story/editorial", OUTLINE, ABRIDGED, MANUSCRIPT]:
         p = git.root / d
         if not p.exists():
             p.mkdir(parents=True)
@@ -1387,6 +1433,74 @@ def cmd_log(git: Git, args) -> int:
     return 0
 
 
+def cmd_feedback(git: Git, args) -> int:
+    p = load_project(git)
+    plan, o = p.plan, p.outline
+    edts = plan.of_type("EDT")
+
+    target_filter = args.id
+    status_filter = (args.status or "open").lower()
+    stage_filter = (args.stage or "").lower()
+
+    matched: List[Section] = []
+    for s in edts:
+        st = (s.field_value("status") or "").lower()
+        if status_filter != "all" and st != status_filter:
+            continue
+        stage = (s.field_value("stage") or "").lower()
+        if stage_filter and stage_filter != "all" and stage != "all" and stage != stage_filter:
+            continue
+        if target_filter:
+            if target_filter == s.id:
+                matched.append(s)
+                continue
+            target_val = s.field_value("target") or ""
+            if target_filter in target_val or target_filter in s.ref_ids():
+                matched.append(s)
+                continue
+            if target_filter in o.scenes:
+                cid = o.chapter_of.get(target_filter)
+                if cid and (cid in target_val or cid in s.ref_ids()):
+                    matched.append(s)
+                    continue
+        else:
+            matched.append(s)
+
+    if args.json:
+        data = []
+        for s in matched:
+            data.append({
+                "id": s.id,
+                "title": s.title,
+                "target": s.field_value("target"),
+                "stage": s.field_value("stage"),
+                "status": s.field_value("status"),
+                "file": s.file,
+                "text": s.text
+            })
+        emit_json(data)
+        return 0
+
+    if not matched:
+        scope = f" matching '{target_filter}'" if target_filter else ""
+        print(f"No {status_filter} editorial directives found{scope}.")
+        return 0
+
+    if target_filter and len(matched) == 1 and matched[0].id == target_filter:
+        print(matched[0].text)
+        return 0
+
+    out = ["| ID | Target | Stage | Status | Title |",
+           "|----|--------|-------|--------|-------|"]
+    for s in matched:
+        tgt = s.field_value("target") or "-"
+        stg = s.field_value("stage") or "-"
+        st = s.field_value("status") or "-"
+        out.append(f"| {s.id} | {tgt} | {stg} | {st} | {s.title} |")
+    print("\n".join(out))
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="specnovel", description=__doc__.split("\n\n")[0])
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
@@ -1400,13 +1514,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("delta", "ID-level changes in story/ kb/ outline/ since a stage baseline"),
              ("impact", "scenes to (re)generate in a derived layer"),
              ("accept", "commit and advance one or more stage baselines"),
+             ("feedback", "list and inspect editorial directives (story/editorial/EDT-xxx)"),
              ("index", "regenerate kb/INDEX.md (catalog of all IDs)"),
              ("stats", "word counts per chapter/scene vs targets"),
              ("compile", "assemble the novel in reading order into build/"),
              ("log", "list sync commits")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
         if name == "dag":
             p.add_argument("--mermaid", action="store_true", help="output story DAG as a mermaid diagram")
@@ -1421,6 +1536,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--stage", choices=STAGES, default="plan", help="baseline to compare against")
         if name == "impact":
             p.add_argument("--stage", choices=list(LAYERS), required=True)
+        if name == "feedback":
+            p.add_argument("id", nargs="?", help="optional target scene/chapter ID (e.g. SCN-014) or EDT-xxx ID")
+            p.add_argument("--status", choices=["open", "applied", "superseded", "wontfix", "all"], default="open",
+                           help="filter by directive status (default: open)")
+            p.add_argument("--stage", choices=["outline", "abridged", "manuscript", "all"],
+                           help="filter by target stage")
         if name == "accept":
             p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["all"])
             p.add_argument("-m", "--message", default="", help="short summary for the commit subject")
@@ -1442,7 +1563,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = Path(args.root).resolve()
     handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
                 "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
-                "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log}
+                "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback}
     try:
         if args.command == "init":
             return cmd_init(root, args)

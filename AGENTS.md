@@ -14,6 +14,9 @@ by AI writing agents.
   - `brief.md`: Interview decisions: premise, genre, audience, length, POV, setting eras, research rigor.
   - `style.md`: **Binding writing-style guide** for the manuscript. Dictates voice, rhythm, POV, diction,
     dialogue conventions, interiority, and anti-patterns.
+  - `editorial/`: **The Editorial Feedback Database (`EDT-NNN.md`).** Records situational, scene-specific, or
+    prose-level feedback that does not promote to top-level style/KB, ensuring it persists and is re-applied
+    whenever artifacts are re-rendered.
 - **`kb/`**: **The Knowledge Base (Story Bible & Fact Repository).**
   - Characters (`CHR`), Places (`PLC`), Organizations (`ORG`), Objects (`OBJ`), Plot Elements (`PLT`),
     Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Researched Facts (`FCT`), Sources (`SRC`),
@@ -75,6 +78,12 @@ by AI writing agents.
    - The root of the DAG is the novel's final denouement (`- **Denouement:** true` or specified in `story/brief.md`).
    - Every element in the story must have a causal path leading to the root denouement (no dead-ends or inessential scenes).
    - Automated DAG tests (`python scripts/specnovel.py dag`) must be executed whenever the outline is touched.
+8. **Editorial Feedback Triage & Persistence**:
+   Direct author/editor feedback on drafts must first be evaluated for promotion into source material
+   (`story/style.md` for voice/anti-patterns, `kb/` for character traits/facts, `outline/` for beats/dialogue).
+   Feedback that is local, situational, or prose-specific is recorded in the editorial feedback database
+   (`story/editorial/EDT-NNN.md`). Whenever intermediate or final drafts are re-rendered, all active directives
+   targeting that scope must be ingested and satisfied, preventing editorial regression.
 
 ---
 

@@ -56,6 +56,15 @@ When the author is satisfied with a batch of planning changes (KB and/or outline
 `specnovel.py check`, `specnovel.py index`, then
 `specnovel.py accept --stage plan -m "<summary>"`.
 
+### E. Triage editorial feedback
+When the author provides direct feedback on draft scenes:
+1. **Systemic Check**: If the note represents a recurring rule or canon change (e.g. character background,
+   general voice tic, setting layout, historical fact), promote it to `kb/` (or propose an update to `story/style.md`).
+2. **Local Directive**: If the note is scene-specific, local blocking, or prose-level texture that does not
+   belong in global specs, record it in `story/editorial/EDT-NNN.md` (allocate with `next-id EDT`), setting
+   `Target: [[SCN-...]]`, `Stage:`, and `Status: open`. This ensures it is automatically detected by
+   `specnovel.py impact` and re-applied during rendering.
+
 ## Rules
 * Never edit `abridged/` or `manuscript/` here; never create `FCT`/`SRC` entries here.
 * Never renumber, reuse or "tidy" IDs. Deleted IDs stay retired.

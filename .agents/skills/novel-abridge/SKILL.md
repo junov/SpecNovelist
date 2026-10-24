@@ -74,6 +74,9 @@ For each target scene (`SCN-xxx`):
      know versus what they conceal.
    - `PLC`: Spatial layout required for blocking (doors, distances, obstacles).
    - `FCT` and `WLD`: Procedural or factual constraints governing the events.
+3. **Editorial directives**:
+   - Check `specnovel.py feedback SCN-xxx --stage abridged` (or inspect `story/editorial/`) for any
+     open `EDT` directives affecting this scene or chapter, and apply them directly to the beats and dialogue.
 
 ### 3. Draft the Abridged Scene
 Follow [abridged-format.md](references/abridged-format.md):
