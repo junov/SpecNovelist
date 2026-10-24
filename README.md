@@ -600,7 +600,7 @@ zero external dependencies and interacts directly with Git.
 | `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
 | `harvest` | Reverse-engineers characters, places, dialogue, and beats from raw prose drafts into KB, outline, and abridged layers. | `python scripts/specnovel.py harvest <draft-file> [--apply] [--batch]` |
 | `scenario` | Manages folder-based what-if scenarios in `story/scenarios/<name>/` (create, list, diff, activate, merge, delete). | `python scripts/specnovel.py scenario create alternate-ending -m "A dies"` |
-| `audit` | Developmental editorial telemetry: pacing waveform, dialogue ratio, character agency, Chekhov gun distance gaps, sag detection. | `python scripts/specnovel.py audit [--developmental] [--json]` |
+| `audit` | Multi-dimensional developmental telemetry: baseline-cached pacing waveforms, cadence entropy, 5-modality sensory radar, cliché/passive voice detection, Chekhov distance gaps, epistemic irony, and longitudinal stage deltas. | `python scripts/specnovel.py audit [--deep] [--scene SCN-xxx] [--compare baseline]` |
 | `takes` | Manages versioned scene takes in `story/takes/<SCN-ID>/<take-name>.md` (save, list, diff, activate, delete). | `python scripts/specnovel.py takes save SCN-014 noir -m "Noir take"` |
 
 ---

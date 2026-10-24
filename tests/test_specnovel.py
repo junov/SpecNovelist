@@ -1122,6 +1122,76 @@ Elena opens the letter.
         self.assertEqual(res["epistemic_matrix"]["PLT-001"]["learns"], ["CHR-001"])
         self.assertEqual(res["epistemic_matrix"]["PLT-001"]["hidden_from"], ["CHR-002"])
 
+    def test_baseline_driven_metrics_cache_and_deep_telemetry(self):
+        outline_with_data = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]",
+            1
+        ).replace(
+            "- **Facts:** [[FCT-001]]",
+            "- **Facts:** [[FCT-001]]\n- **Pays off:** [[OBJ-001]]"
+        )
+        self.write("outline/outline.md", outline_with_data)
+        self.write("kb/objects/OBJ-001-lock.md", "# OBJ-001: Brass Lock\n- **Category:** Prop\n")
+        # Prose with sensory terms, cliché, and passive voice
+        prose_scn1 = (
+            "# CHP-001: The Letter\n\n"
+            "## SCN-001: Elena receives the letter\n"
+            "Elena opened the cold brass lock as a chill ran down her spine. "
+            "A cold sweat broke out across her forehead. "
+            "The iron envelope was taken by Karl in dead silence.\n\n"
+            "## SCN-002: Karl refuses\n"
+            "Karl listened to the distant church bells echoing across the foggy harbor. "
+            "\"We must not fail,\" he whispered.\n"
+        )
+        self.write("manuscript/en-US/CHP-001.md", prose_scn1)
+        self.write("abridged/CHP-001.md", prose_scn1)
+        self.write("story/acknowledgements.md", "## Acknowledgements\nWritten with Claude and Gemini.\n")
+
+        # 1. Accept initial manuscript baseline with --force
+        self.run_cli("accept", "--stage", "manuscript", "-m", "Initial baseline", "--force")
+
+        # 2. Run deep audit
+        code, res_deep = self.json_cli("audit", "--deep")
+        self.assertEqual(code, 0)
+        self.assertIn("sensory_palette", res_deep)
+        self.assertGreater(res_deep["sensory_palette"]["tactile"], 0)
+        self.assertGreater(res_deep["sensory_palette"]["auditory"], 0)
+        self.assertGreater(res_deep["summary"]["total_cliches"], 0)
+        self.assertGreater(res_deep["summary"]["total_passive_constructions"], 0)
+
+        # 3. Verify metrics cache file created
+        cache_file = self.root / ".specnovel" / "metrics_cache.json"
+        self.assertTrue(cache_file.is_file())
+        cache_json = json.loads(cache_file.read_text(encoding="utf-8"))
+        self.assertIn("SCN-001", cache_json["scenes"])
+        self.assertIn("cliches", cache_json["scenes"]["SCN-001"])
+
+        # 4. Single-scene drill-down
+        code, res_scene = self.json_cli("audit", "--scene", "SCN-001")
+        self.assertEqual(code, 0)
+        self.assertEqual(res_scene["scene_id"], "SCN-001")
+        self.assertGreater(len(res_scene["cliches"]), 0)
+        self.assertTrue(any("cold sweat" in c["cliche"] for c in res_scene["cliches"]))
+        self.assertGreater(res_scene["passive_count"], 0)
+        self.assertGreater(res_scene["cadence_entropy"], 0.0)
+
+        # 5. Upstream Semantic Invalidation: modify referenced place kb/places/PLC-001-harbor.md
+        # Notice that prose in manuscript/en-US/CHP-001.md is NOT touched!
+        self.write("kb/places/PLC-001-harbor.md", PLACE + "\n- **Sensory Note:** sulfur and hot grease.\n")
+        code, res_recheck = self.json_cli("audit")
+        self.assertEqual(code, 0)
+        # SCN-001 references PLC-001, so it must be detected as dirty!
+        self.assertGreaterEqual(res_recheck["summary"]["dirty_scenes_count"], 1)
+
+        # 6. Longitudinal Delta: compare against baseline
+        code, res_delta = self.json_cli("audit", "--compare", "baseline")
+        self.assertEqual(code, 0)
+        self.assertIn("baseline_sha", res_delta)
+        self.assertIn("metrics", res_delta)
+        self.assertIn("word_count", res_delta["metrics"])
+        self.assertIn("sensory_density_per_k", res_delta["metrics"])
+
     def test_versioned_scene_takes(self):
         self.write(
             "manuscript/en-US/CHP-001.md",

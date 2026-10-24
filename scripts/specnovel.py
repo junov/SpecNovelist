@@ -43,6 +43,7 @@ import argparse
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -3681,8 +3682,455 @@ def cmd_scenario(git: Git, args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ metrics & telemetry
+SENSORY_LEXICON = {
+    "visual": {
+        "see", "saw", "sight", "look", "looked", "glance", "glanced", "stare", "stared", "peer", "peered",
+        "gleam", "gleamed", "glow", "glowed", "shadow", "shadows", "dark", "darkness", "light", "bright",
+        "color", "crimson", "pale", "shimmer", "flash", "flicker", "silhouette", "behold", "dim", "dusk",
+        "dawn", "glint", "shine", "shining", "obscure", "vivid", "hazy", "gleaming", "glisten", "glistening"
+    },
+    "auditory": {
+        "hear", "heard", "sound", "sounds", "listen", "listened", "echo", "echoes", "whisper", "whispered",
+        "shout", "shouted", "scream", "screamed", "cry", "cried", "rustle", "click", "clatter", "clang",
+        "roar", "rumble", "thud", "buzz", "hum", "chime", "groan", "groaned", "hiss", "creak", "muffled",
+        "silence", "deafening", "murmur", "murmured", "crack", "snap", "rattle", "shriek", "screech"
+    },
+    "tactile": {
+        "touch", "touched", "felt", "cold", "hot", "warm", "warmth", "chill", "chilly", "freeze", "freezing",
+        "rough", "smooth", "sharp", "prick", "shiver", "shivering", "tremble", "trembling", "shudder",
+        "shuddered", "damp", "wet", "dry", "sweat", "sweating", "scalding", "numb", "sting", "ache", "itching",
+        "clammy", "coarse", "silky", "hard", "soft", "heavy", "pressure", "grip", "gripped", "grasp", "grasped"
+    },
+    "olfactory": {
+        "smell", "smelled", "scent", "scented", "odor", "stench", "reek", "reeked", "perfume", "fragrance",
+        "aroma", "sniff", "sniffed", "inhale", "inhaled", "musk", "musky", "sulfur", "brine", "smoke",
+        "incense", "stale", "pungent", "fetid", "musty", "acrid", "rank"
+    },
+    "gustatory": {
+        "taste", "tasted", "flavor", "sweet", "bitter", "sour", "salty", "savory", "tangy", "swallow",
+        "swallowed", "chew", "chewed", "sip", "sipped", "gulp", "gulped", "lick", "licked", "delicious",
+        "bland", "parched", "spicy", "tart"
+    }
+}
+
+CLICHE_CATALOG = [
+    ("cold sweat", "somatic shivering or bead of sweat"),
+    ("piercing blue eyes", "specific eye detail or focused gaze"),
+    ("piercing eyes", "intense stare or narrowed gaze"),
+    ("time stood still", "slowed physical perception or suspended breath"),
+    ("dead silence", "absence of specific ambient sounds"),
+    ("heavy heart", "visceral ache or dropped posture"),
+    ("crystal clear", "distinct or unclouded"),
+    ("bated breath", "shallow breathing or caught breath"),
+    ("heart skipped a beat", "somatic pulse flutter or sharp intake"),
+    ("blood ran cold", "sudden chill or dread"),
+    ("white as a sheet", "blanched pallor or drained color"),
+    ("pitch black", "ink-dark or impenetrable dark"),
+    ("in the blink of an eye", "in an instant or before a breath could form"),
+    ("calm before the storm", "ominous stillness or taut quiet"),
+]
+
+BE_VERBS = {"was", "were", "is", "are", "been", "being", "be", "am"}
+IRREGULAR_PAST_PARTICIPLES = {
+    "done", "seen", "taken", "broken", "given", "known", "made", "found", "built", "left", "sent",
+    "struck", "shot", "slain", "borne", "hidden", "chosen", "drawn", "driven", "eaten", "fallen",
+    "forgotten", "frozen", "grown", "rung", "risen", "run", "spoken", "stolen", "sworn", "torn",
+    "thrown", "worn", "written", "lost", "kept", "held", "heard", "felt", "spent", "caught", "brought"
+}
+
+POSITIVE_WORDS = {
+    "love", "loved", "hope", "hoped", "joy", "joyful", "triumph", "smile", "smiled", "laugh",
+    "laughed", "comfort", "comforted", "peace", "peaceful", "brave", "kind", "kindness", "delight",
+    "delighted", "warm", "warmth", "safe", "safety", "alive", "freedom", "honor", "victory",
+    "beauty", "beautiful", "glow", "glowed", "tender", "cherish", "cherished", "radiant"
+}
+NEGATIVE_WORDS = {
+    "death", "died", "dead", "fear", "feared", "pain", "painful", "terror", "terrified", "dread",
+    "dreaded", "grief", "blood", "bloody", "wound", "wounded", "loss", "lost", "dark", "darkness",
+    "cold", "cruel", "cruelty", "threat", "threatened", "despair", "fail", "failed", "hate", "hated",
+    "kill", "killed", "suffer", "suffered", "enemy", "destroy", "destroyed", "ruin", "ruined", "shame",
+    "corpse", "agony"
+}
+
+
+def compute_cadence_entropy(lengths: List[int]) -> float:
+    if len(lengths) <= 1:
+        return 0.0
+    bins = [0] * 7
+    for l in lengths:
+        if l <= 5: bins[0] += 1
+        elif l <= 10: bins[1] += 1
+        elif l <= 15: bins[2] += 1
+        elif l <= 20: bins[3] += 1
+        elif l <= 30: bins[4] += 1
+        elif l <= 40: bins[5] += 1
+        else: bins[6] += 1
+    total = len(lengths)
+    entropy = 0.0
+    for c in bins:
+        if c > 0:
+            p = c / total
+            entropy -= p * math.log2(p)
+    return round(entropy, 2)
+
+
+def detect_passive_voice(lines: List[str], start_line: int = 1) -> List[Dict[str, Any]]:
+    hits = []
+    for idx, line in enumerate(lines, start_line):
+        clean = COMMENT_RE.sub("", line).strip()
+        if not clean or clean.startswith("#"):
+            continue
+        words = [w.lower() for w in WORD_RE.findall(clean)]
+        for i, w in enumerate(words):
+            if w in BE_VERBS:
+                for j in range(i + 1, min(i + 4, len(words))):
+                    target = words[j]
+                    if target.endswith("ed") or target in IRREGULAR_PAST_PARTICIPLES:
+                        phrase = " ".join(words[i:j+1])
+                        hits.append({"line": idx, "phrase": phrase, "text": clean[:80]})
+                        break
+    return hits
+
+
+def compute_sensory_palette(lines: List[str], start_line: int = 1) -> Dict[str, Any]:
+    counts = {m: 0 for m in SENSORY_LEXICON}
+    occurrences = []
+    for idx, line in enumerate(lines, start_line):
+        clean = COMMENT_RE.sub("", line).strip()
+        if not clean or clean.startswith("#"):
+            continue
+        words = [w.lower() for w in WORD_RE.findall(clean)]
+        for w in words:
+            for modality, word_set in SENSORY_LEXICON.items():
+                if w in word_set:
+                    counts[modality] += 1
+                    occurrences.append({"line": idx, "modality": modality, "word": w})
+    return {"counts": counts, "occurrences": occurrences}
+
+
+def detect_cliches(lines: List[str], start_line: int = 1) -> List[Dict[str, Any]]:
+    hits = []
+    for idx, line in enumerate(lines, start_line):
+        clean = COMMENT_RE.sub("", line).strip()
+        if not clean or clean.startswith("#"):
+            continue
+        line_lower = clean.lower()
+        for cliche, suggestion in CLICHE_CATALOG:
+            if cliche in line_lower:
+                hits.append({
+                    "line": idx,
+                    "cliche": cliche,
+                    "suggestion": suggestion,
+                    "text": clean[:80]
+                })
+    return hits
+
+
+def compute_emotional_valence(lines: List[str]) -> float:
+    pos_count = 0
+    neg_count = 0
+    total_words = 0
+    for line in lines:
+        clean = COMMENT_RE.sub("", line).strip()
+        if not clean or clean.startswith("#"):
+            continue
+        words = [w.lower() for w in WORD_RE.findall(clean)]
+        total_words += len(words)
+        for w in words:
+            if w in POSITIVE_WORDS: pos_count += 1
+            elif w in NEGATIVE_WORDS: neg_count += 1
+    if total_words == 0:
+        return 0.0
+    val = (pos_count - neg_count) / math.sqrt(max(total_words, 10))
+    return round(max(-1.0, min(1.0, val / 3.0)), 2)
+
+
+def compute_single_scene_metrics(sid: str, outline_sec: Optional[Section], derived_sec: Optional[Section], plan: Model) -> Dict[str, Any]:
+    target_wc = target_words(outline_sec)
+    lines = derived_sec.lines if derived_sec else []
+    start_line = derived_sec.line if derived_sec else 1
+    file_rel = derived_sec.file if derived_sec else (outline_sec.file if outline_sec else "")
+
+    clean_lines = [COMMENT_RE.sub("", l) for l in lines]
+    raw_text = "\n".join(clean_lines)
+    actual_wc = word_count(lines) if derived_sec else 0
+
+    dialogue_wc = 0
+    quotes = re.findall(r'["“]([^"”]+)["”]', raw_text)
+    for q in quotes:
+        dialogue_wc += len(WORD_RE.findall(q))
+    dialogue_ratio = round(dialogue_wc / max(actual_wc, 1), 2)
+
+    clean_prose = re.sub(r'#+.*', '', raw_text)
+    sents = [s.strip() for s in re.split(r'[.!?]+', clean_prose) if s.strip() and len(WORD_RE.findall(s)) > 1]
+    sentence_count = len(sents)
+    sent_lengths = [len(WORD_RE.findall(s)) for s in sents]
+    avg_sentence_len = round(sum(sent_lengths) / max(len(sent_lengths), 1), 1) if sent_lengths else 0.0
+    cadence_entropy = compute_cadence_entropy(sent_lengths)
+
+    paras = [pr.strip() for pr in re.split(r'\n\s*\n', clean_prose) if pr.strip()]
+    paragraph_count = len(paras)
+
+    passive_hits = detect_passive_voice(lines, start_line)
+    sensory_data = compute_sensory_palette(lines, start_line)
+    cliches = detect_cliches(lines, start_line)
+    valence = compute_emotional_valence(lines)
+
+    refs = sorted(outline_sec.ref_ids()) if outline_sec else []
+    plot_advancements = len([r for r in refs if r.startswith("PLT-")])
+    has_change = bool(outline_sec and outline_sec.field_value("change"))
+    velocity = round((plot_advancements + (1 if has_change else 0)) / (max(actual_wc, 100) / 1000.0), 2)
+
+    return {
+        "scene_id": sid,
+        "title": outline_sec.title if outline_sec else sid,
+        "file": file_rel,
+        "line": start_line,
+        "target_words": target_wc,
+        "actual_words": actual_wc,
+        "dialogue_words": dialogue_wc,
+        "dialogue_ratio": dialogue_ratio,
+        "sentence_count": sentence_count,
+        "avg_sentence_len": avg_sentence_len,
+        "cadence_entropy": cadence_entropy,
+        "paragraph_count": paragraph_count,
+        "passive_count": len(passive_hits),
+        "passive_hits": passive_hits,
+        "sensory_counts": sensory_data["counts"],
+        "sensory_occurrences": sensory_data["occurrences"],
+        "cliches": cliches,
+        "emotional_valence": valence,
+        "narrative_velocity": velocity,
+        "referenced_ids": refs
+    }
+
+
+def get_or_update_metrics_cache(p: Project, stage: str = "manuscript", force_recompute: bool = False) -> Tuple[Dict[str, Any], Set[str], Optional[str]]:
+    git = p.git
+    base_sha = git.baseline(stage)
+    base_label = base_sha or "uncommitted"
+    cache_dir = git.root / ".specnovel"
+    cache_file = cache_dir / "metrics_cache.json"
+
+    cached_data: Dict[str, Any] = {}
+    if not force_recompute and cache_file.is_file():
+        try:
+            cached_data = json.loads(cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            cached_data = {}
+
+    cached_base = cached_data.get("baseline_sha")
+    cached_scenes = cached_data.get("scenes", {})
+
+    dirty_scenes: Set[str] = set()
+
+    if force_recompute or cached_base != base_label or not cached_scenes:
+        if base_sha:
+            old_plan = build_model(git.commit_md(base_sha, *PLAN_DIRS))
+            changes = diff_models(old_plan, p.plan)
+            changed_ids = {c.id for c in changes if c.id}
+            changed_files = {d["file"] for d in git.changed_since(base_sha, MANUSCRIPT, ABRIDGED)}
+        else:
+            changed_ids = set()
+            changed_files = set()
+
+        for sid in p.outline.scenes:
+            d_sec = p.layers[stage].scenes.get(sid) or p.layers["abridged"].scenes.get(sid)
+            if not d_sec or d_sec.file in changed_files:
+                dirty_scenes.add(sid)
+                continue
+            if sid in changed_ids:
+                dirty_scenes.add(sid)
+                continue
+            refs = set()
+            for a in ancestors(p.plan, sid):
+                refs |= a.ref_ids()
+            if refs & changed_ids:
+                dirty_scenes.add(sid)
+                continue
+            if sid not in cached_scenes:
+                dirty_scenes.add(sid)
+    else:
+        uncommitted_files = {d["file"] for d in git.changed_since("HEAD", MANUSCRIPT, ABRIDGED, *PLAN_DIRS)} if git.has_commits() else set()
+        for sid in p.outline.scenes:
+            d_sec = p.layers[stage].scenes.get(sid) or p.layers["abridged"].scenes.get(sid)
+            if not d_sec or d_sec.file in uncommitted_files or sid not in cached_scenes:
+                dirty_scenes.add(sid)
+
+    metrics_by_scene = dict(cached_scenes)
+    for sid in p.outline.scenes:
+        if sid in dirty_scenes or sid not in metrics_by_scene:
+            outline_sec = p.plan.defs.get(sid)
+            derived_sec = p.layers[stage].scenes.get(sid) or p.layers["abridged"].scenes.get(sid)
+            metrics_by_scene[sid] = compute_single_scene_metrics(sid, outline_sec, derived_sec, p.plan)
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        new_cache = {
+            "baseline_sha": base_label,
+            "scenes": metrics_by_scene
+        }
+        cache_file.write_text(json.dumps(new_cache, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return metrics_by_scene, dirty_scenes, base_sha
+
+
 def cmd_audit(git: Git, args) -> int:
     p = load_project(git)
+    target_stage = "manuscript" if p.layers["manuscript"].scenes else "abridged"
+
+    # 1. Handle --compare baseline
+    if getattr(args, "compare", None):
+        base_sha = git.baseline(target_stage)
+        if not base_sha:
+            msg = f"specnovel: no baseline commit found for stage '{target_stage}'. Accept a baseline using 'specnovel accept --stage {target_stage}'."
+            if getattr(args, "json", False):
+                print(json.dumps({"error": msg}, indent=2))
+            else:
+                print(msg, file=sys.stderr)
+            return 1
+
+        curr_metrics, _, _ = get_or_update_metrics_cache(p, target_stage, force_recompute=getattr(args, "no_cache", False))
+
+        old_plan = build_model(git.commit_md(base_sha, *PLAN_DIRS))
+        old_outline = outline_of(old_plan)
+        old_layer = derived_of(build_model(git.commit_md(base_sha, MANUSCRIPT)))
+        if not old_layer.scenes:
+            old_layer = derived_of(build_model(git.commit_md(base_sha, ABRIDGED)))
+
+        base_metrics = {}
+        for sid in old_outline.scenes:
+            base_metrics[sid] = compute_single_scene_metrics(sid, old_plan.defs.get(sid), old_layer.scenes.get(sid), old_plan)
+
+        curr_words = sum(m["actual_words"] for m in curr_metrics.values())
+        base_words = sum(m["actual_words"] for m in base_metrics.values())
+
+        curr_sents = sum(m["sentence_count"] for m in curr_metrics.values())
+        base_sents = sum(m["sentence_count"] for m in base_metrics.values())
+
+        curr_avg_sent = round(curr_words / max(curr_sents, 1), 1)
+        base_avg_sent = round(base_words / max(base_sents, 1), 1)
+
+        curr_entropy = round(sum(m["cadence_entropy"] for m in curr_metrics.values()) / max(len(curr_metrics), 1), 2)
+        base_entropy = round(sum(m["cadence_entropy"] for m in base_metrics.values()) / max(len(base_metrics), 1), 2)
+
+        curr_dlg = round(sum(m["dialogue_words"] for m in curr_metrics.values()) / max(curr_words, 1), 2)
+        base_dlg = round(sum(m["dialogue_words"] for m in base_metrics.values()) / max(base_words, 1), 2)
+
+        curr_sensory_tot = sum(sum(m["sensory_counts"].values()) for m in curr_metrics.values())
+        base_sensory_tot = sum(sum(m["sensory_counts"].values()) for m in base_metrics.values())
+        curr_sensory_dens = round((curr_sensory_tot / max(curr_words, 1)) * 1000, 1)
+        base_sensory_dens = round((base_sensory_tot / max(base_words, 1)) * 1000, 1)
+
+        curr_passive_tot = sum(m["passive_count"] for m in curr_metrics.values())
+        base_passive_tot = sum(m["passive_count"] for m in base_metrics.values())
+        curr_passive_pct = round((curr_passive_tot / max(curr_sents, 1)) * 100, 1)
+        base_passive_pct = round((base_passive_tot / max(base_sents, 1)) * 100, 1)
+
+        curr_cliches = sum(len(m["cliches"]) for m in curr_metrics.values())
+        base_cliches = sum(len(m["cliches"]) for m in base_metrics.values())
+
+        delta_data = {
+            "baseline_sha": base_sha[:8],
+            "metrics": {
+                "word_count": {"baseline": base_words, "current": curr_words, "delta": curr_words - base_words},
+                "avg_sentence_len": {"baseline": base_avg_sent, "current": curr_avg_sent, "delta": round(curr_avg_sent - base_avg_sent, 1)},
+                "cadence_entropy": {"baseline": base_entropy, "current": curr_entropy, "delta": round(curr_entropy - base_entropy, 2)},
+                "dialogue_ratio": {"baseline": base_dlg, "current": curr_dlg, "delta": round(curr_dlg - base_dlg, 2)},
+                "sensory_density_per_k": {"baseline": base_sensory_dens, "current": curr_sensory_dens, "delta": round(curr_sensory_dens - base_sensory_dens, 1)},
+                "passive_voice_pct": {"baseline": base_passive_pct, "current": curr_passive_pct, "delta": round(curr_passive_pct - base_passive_pct, 1)},
+                "cliches_count": {"baseline": base_cliches, "current": curr_cliches, "delta": curr_cliches - base_cliches}
+            }
+        }
+
+        if getattr(args, "json", False):
+            print(json.dumps(delta_data, indent=2))
+            return 0
+
+        print("=" * 80)
+        print(f"LONGITUDINAL TELEMETRY DELTA (baseline: {base_sha[:8]} -> working tree)")
+        print("=" * 80)
+        print(f"{'METRIC':<30} {'BASELINE':<12} {'CURRENT':<12} {'DELTA':<10}")
+        print("-" * 80)
+        for k, v in delta_data["metrics"].items():
+            b_val = str(v["baseline"])
+            c_val = str(v["current"])
+            d_val = f"+{v['delta']}" if v['delta'] > 0 else str(v['delta'])
+            print(f"{k:<30} {b_val:<12} {c_val:<12} {d_val:<10}")
+        print("=" * 80)
+        return 0
+
+    # 2. Handle --scene <sid> drill-down
+    if getattr(args, "scene", None):
+        target_sid = args.scene
+        if target_sid not in p.outline.scenes:
+            print(f"specnovel: scene '{target_sid}' not found in outline", file=sys.stderr)
+            return 1
+
+        metrics_by_scene, _, base_sha = get_or_update_metrics_cache(p, target_stage, force_recompute=getattr(args, "no_cache", False))
+        m = metrics_by_scene[target_sid]
+
+        if getattr(args, "json", False):
+            print(json.dumps(m, indent=2))
+            return 0
+
+        outline_sec = p.plan.defs.get(target_sid)
+        print("=" * 80)
+        print(f"SCENE TELEMETRY DRILL-DOWN: {target_sid} ({m['title']})")
+        print("=" * 80)
+        print(f"Location:            {m['file']} (line {m['line']})")
+        print(f"Word Count:          {m['actual_words']} actual (target: {m['target_words']})")
+        print(f"Dialogue Ratio:      {m['dialogue_ratio']:.0%} ({m['dialogue_words']} dialogue words)")
+        print(f"Narrative Velocity:  {m['narrative_velocity']} plot shifts / 1k words")
+        print(f"Emotional Valence:   {m['emotional_valence']:+.2f} (trajectory score)")
+        print(f"Sentence Rhythm:     {m['avg_sentence_len']} avg words / sentence | Cadence Entropy: {m['cadence_entropy']} bits")
+
+        print("\n" + "-" * 80)
+        print("SENSORY PALETTE RADAR")
+        print("-" * 80)
+        for mod, count in m["sensory_counts"].items():
+            bar = "█" * min(20, count) if count > 0 else "-"
+            print(f"  {mod.capitalize():<12} {count:<4} {bar}")
+
+        if m["passive_count"] > 0:
+            print("\n" + "-" * 80)
+            print(f"PASSIVE VOICE OCCURRENCES ({m['passive_count']} detected)")
+            print("-" * 80)
+            for p_hit in m["passive_hits"][:5]:
+                print(f"  Line {p_hit['line']}: \"{p_hit['phrase']}\" -> {p_hit['text']}")
+
+        if m["cliches"]:
+            print("\n" + "-" * 80)
+            print(f"CLICHÉS DETECTED ({len(m['cliches'])} detected)")
+            print("-" * 80)
+            for cl in m["cliches"]:
+                print(f"  Line {cl['line']}: \"{cl['cliche']}\"")
+                print(f"    Suggested Somatic/Visceral Alternative: {cl['suggestion']}")
+
+        print("\n" + "-" * 80)
+        print("UPSTREAM SPECIFICATION CONNECTIONS")
+        print("-" * 80)
+        if outline_sec:
+            where_val = outline_sec.field_value("where") or ""
+            cast_val = outline_sec.field_value("cast") or ""
+            plants_val = outline_sec.field_value("plants") or "none"
+            pays_val = outline_sec.field_value("pays_off") or "none"
+            reveals_val = outline_sec.field_value("reveals") or "none"
+            hidden_val = outline_sec.field_value("hidden_from") or "none"
+            print(f"  Setting (Where):   {where_val}")
+            print(f"  Cast:              {cast_val}")
+            print(f"  Chekhov Plants:    {plants_val}")
+            print(f"  Chekhov Payoffs:   {pays_val}")
+            print(f"  Reveals (Secret):  {reveals_val}")
+            print(f"  Hidden From:       {hidden_val}")
+        print("=" * 80)
+        return 0
+
+    # 3. Standard / Deep Whole-Novel Audit
+    metrics_by_scene, dirty_scenes, base_sha = get_or_update_metrics_cache(p, target_stage, force_recompute=getattr(args, "no_cache", False))
     scene_ids = p.outline.scenes
 
     pacing_waveform = []
@@ -3696,6 +4144,11 @@ def cmd_audit(git: Git, args) -> int:
     total_words_outline = 0
     total_words_actual = 0
     total_dialogue_words = 0
+    total_cliches = 0
+    total_passive = 0
+
+    novel_sensory = {m: 0 for m in SENSORY_LEXICON}
+    sensory_alerts = []
 
     for chr_sec in p.plan.of_type("CHR"):
         character_agency[chr_sec.id] = {
@@ -3708,54 +4161,39 @@ def cmd_audit(git: Git, args) -> int:
 
     for idx, sid in enumerate(scene_ids, 1):
         outline_sec = p.plan.defs.get(sid)
-        title = outline_sec.title if outline_sec else sid
         ch_id = p.outline.chapter_of.get(sid, "CHP-???")
+        m = metrics_by_scene.get(sid, {})
 
-        target_wc = target_words(outline_sec)
+        actual_wc = m.get("actual_words", 0)
+        target_wc = m.get("target_words", 0)
         total_words_outline += target_wc
+        total_words_actual += actual_wc
+        total_dialogue_words += m.get("dialogue_words", 0)
+        total_cliches += len(m.get("cliches", []))
+        total_passive += m.get("passive_count", 0)
 
-        derived_sec = p.layers["manuscript"].scenes.get(sid) or p.layers["abridged"].scenes.get(sid)
-        actual_wc = 0
-        dialogue_wc = 0
-        dialogue_ratio = 0.0
-        avg_sentence_len = 0.0
-        sentence_count = 0
-        paragraph_count = 0
+        for mod, cnt in m.get("sensory_counts", {}).items():
+            novel_sensory[mod] += cnt
 
-        if derived_sec:
-            raw_text = "\n".join(derived_sec.lines)
-            actual_wc = word_count(derived_sec.lines)
-            total_words_actual += actual_wc
-
-            quotes = re.findall(r'["“]([^"”]+)["”]', raw_text)
-            for q in quotes:
-                dialogue_wc += len(WORD_RE.findall(q))
-            total_dialogue_words += dialogue_wc
-            if actual_wc > 0:
-                dialogue_ratio = round(dialogue_wc / actual_wc, 2)
-
-            clean_prose = re.sub(r'#+.*', '', raw_text)
-            sents = [s.strip() for s in re.split(r'[.!?]+', clean_prose) if s.strip() and len(WORD_RE.findall(s)) > 1]
-            sentence_count = len(sents)
-            if sentence_count > 0:
-                avg_sentence_len = round(actual_wc / sentence_count, 1)
-
-            paras = [pr.strip() for pr in re.split(r'\n\s*\n', clean_prose) if pr.strip()]
-            paragraph_count = len(paras)
-        else:
-            actual_wc = target_wc
+        # Check sensory alert: actual_words > 300 but tactile == 0 or olfactory == 0
+        if actual_wc > 300 and (m.get("sensory_counts", {}).get("tactile", 0) == 0 or m.get("sensory_counts", {}).get("olfactory", 0) == 0):
+            where_val = outline_sec.field_value("where") if outline_sec else "unknown"
+            sensory_alerts.append({"scene": sid, "words": actual_wc, "where": where_val})
 
         waveform_entry = {
             "index": idx,
             "scene": sid,
-            "title": title,
+            "title": m.get("title", sid),
             "chapter": ch_id,
             "target_words": target_wc,
             "actual_words": actual_wc,
-            "dialogue_ratio": dialogue_ratio,
-            "avg_sentence_len": avg_sentence_len,
-            "sentences": sentence_count,
-            "paragraphs": paragraph_count
+            "dialogue_ratio": m.get("dialogue_ratio", 0.0),
+            "avg_sentence_len": m.get("avg_sentence_len", 0.0),
+            "cadence_entropy": m.get("cadence_entropy", 0.0),
+            "sentences": m.get("sentence_count", 0),
+            "paragraphs": m.get("paragraph_count", 0),
+            "emotional_valence": m.get("emotional_valence", 0.0),
+            "narrative_velocity": m.get("narrative_velocity", 0.0)
         }
         pacing_waveform.append(waveform_entry)
 
@@ -3772,23 +4210,23 @@ def cmd_audit(git: Git, args) -> int:
                     character_agency[chr_id]["scenes"].append(sid)
 
             plants_str = outline_sec.field_value("plants") or ""
-            for m in REF_RE.finditer(plants_str):
-                eid = m.group("id")
+            for rm in REF_RE.finditer(plants_str):
+                eid = rm.group("id")
                 all_plants.setdefault(eid, []).append({"scene": sid, "index": idx, "chapter": ch_id})
 
             payoffs_str = outline_sec.field_value("pays_off") or outline_sec.field_value("paysoff") or ""
-            for m in REF_RE.finditer(payoffs_str):
-                eid = m.group("id")
+            for rm in REF_RE.finditer(payoffs_str):
+                eid = rm.group("id")
                 all_payoffs.setdefault(eid, []).append({"scene": sid, "index": idx, "chapter": ch_id})
 
             reveals_str = outline_sec.field_value("reveals") or ""
             learns_str = outline_sec.field_value("learns") or ""
             hidden_str = outline_sec.field_value("hidden_from") or ""
             if reveals_str:
-                for m in REF_RE.finditer(reveals_str):
-                    sec_id = m.group("id")
-                    learners = [rm.group("id") for rm in REF_RE.finditer(learns_str)]
-                    hidden = [rm.group("id") for rm in REF_RE.finditer(hidden_str)]
+                for rm in REF_RE.finditer(reveals_str):
+                    sec_id = rm.group("id")
+                    learners = [lm.group("id") for lm in REF_RE.finditer(learns_str)]
+                    hidden = [hm.group("id") for hm in REF_RE.finditer(hidden_str)]
                     secrets_revealed[sec_id] = {
                         "scene": sid,
                         "chapter": ch_id,
@@ -3830,6 +4268,7 @@ def cmd_audit(git: Git, args) -> int:
                 })
 
     overall_dialogue_ratio = round(total_dialogue_words / max(total_words_actual, 1), 2)
+    avg_entropy = round(sum(w["cadence_entropy"] for w in pacing_waveform) / max(len(pacing_waveform), 1), 2)
 
     if getattr(args, "json", False):
         res = {
@@ -3838,13 +4277,21 @@ def cmd_audit(git: Git, args) -> int:
                 "target_words": total_words_outline,
                 "actual_words": total_words_actual,
                 "overall_dialogue_ratio": overall_dialogue_ratio,
-                "pacing_sags_detected": len(consecutive_slow_scenes)
+                "average_cadence_entropy": avg_entropy,
+                "total_cliches": total_cliches,
+                "total_passive_constructions": total_passive,
+                "pacing_sags_detected": len(consecutive_slow_scenes),
+                "baseline_sha": base_sha[:8] if base_sha else "uncommitted",
+                "cached_scenes_count": len(scene_ids) - len(dirty_scenes),
+                "dirty_scenes_count": len(dirty_scenes)
             },
             "waveform": pacing_waveform,
             "character_agency": list(character_agency.values()),
             "chekhov_matrix": chekhov_matrix,
             "epistemic_matrix": secrets_revealed,
-            "pacing_sag_sequences": consecutive_slow_scenes
+            "pacing_sag_sequences": consecutive_slow_scenes,
+            "sensory_palette": novel_sensory,
+            "sensory_alerts": sensory_alerts
         }
         print(json.dumps(res, indent=2))
         return 0
@@ -3852,9 +4299,13 @@ def cmd_audit(git: Git, args) -> int:
     print("=" * 80)
     print("DEVELOPMENTAL EDITORIAL TELEMETRY & PACING AUDIT")
     print("=" * 80)
+    base_info = f"baseline: {base_sha[:8]}" if base_sha else "baseline: none (uncommitted)"
+    cache_info = f"{len(scene_ids) - len(dirty_scenes)} cached, {len(dirty_scenes)} recomputed"
+    print(f"Incremental Cache:          {base_info} ({cache_info})")
     print(f"Total outline target words: {total_words_outline:,}")
     print(f"Total actual prose words:   {total_words_actual:,}")
     print(f"Overall dialogue ratio:     {overall_dialogue_ratio:.0%}")
+    print(f"Average sentence cadence:   {avg_entropy} bits entropy")
     print(f"Total cataloged scenes:     {len(scene_ids)}")
 
     print("\n" + "-" * 80)
@@ -3915,6 +4366,30 @@ def cmd_audit(git: Git, args) -> int:
             print(f"[WARNING] Potential pacing sag sequence: scenes {', '.join(seq)} (2+ consecutive long scenes with no major plot progression).")
     else:
         print("No pacing sags detected. Narrative progression is evenly distributed.")
+
+    if getattr(args, "deep", False):
+        print("\n" + "-" * 80)
+        print("6. MULTI-DIMENSIONAL CRAFT & SENSORY HEALTH")
+        print("-" * 80)
+        tot_sensory = max(sum(novel_sensory.values()), 1)
+        print("Sensory Palette Distribution across Manuscript:")
+        for mod, cnt in novel_sensory.items():
+            pct = (cnt / tot_sensory) * 100
+            bars = "█" * int(pct / 4)
+            print(f"  {mod.capitalize():<12} {cnt:<5} ({pct:>4.1f}%) {bars}")
+
+        if sensory_alerts:
+            print("\nSensory Grounding Warnings (scenes > 300 words lacking tactile or olfactory anchors):")
+            for sa in sensory_alerts[:5]:
+                print(f"  - {sa['scene']} ({sa['words']} words, setting: {sa['where']})")
+        else:
+            print("\nSensory grounding is balanced across scenes.")
+
+        print(f"\nLiterary & Syntactic Polish:")
+        print(f"  - Total clichés detected: {total_cliches}")
+        print(f"  - Total passive voice constructions: {total_passive}")
+        print("Run 'specnovel.py audit --scene <SCN-ID>' for line-by-line attribution drill-down.")
+
     print("=" * 80)
     return 0
 
@@ -4171,6 +4646,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("-m", "--message", default="", help="description or notes for scenario creation")
         if name == "audit":
             p.add_argument("--developmental", action="store_true", default=True, help="include full developmental telemetry")
+            p.add_argument("--deep", action="store_true", help="run multi-dimensional literary, linguistic, and craft metrics")
+            p.add_argument("--scene", help="drill-down into metrics and attribution for a single scene ID (e.g. SCN-001)")
+            p.add_argument("--compare", nargs="?", const="baseline", help="compare current metrics against a Git baseline (default: stage baseline)")
+            p.add_argument("--no-cache", action="store_true", help="bypass metrics cache and force full recomputation")
         if name == "takes":
             p.add_argument("action", choices=["list", "save", "diff", "activate", "delete"], help="take action")
             p.add_argument("id", nargs="?", default="all", help="scene ID, e.g. SCN-001")
