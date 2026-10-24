@@ -92,6 +92,7 @@ PLAN_DIRS = (STORY, KB, OUTLINE)
 ALL_DIRS = (STORY, KB, OUTLINE, GRAPHICS, ABRIDGED, MANUSCRIPT)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 SYNOPSIS_FILE, BRIEF_FILE, STYLE_FILE = "story/synopsis.md", "story/brief.md", "story/style.md"
+CONFIG_FILE, CONFIG_FILE_JSON = "story/config.yaml", "story/config.json"
 MIN_STYLE_WORDS = 400
 
 SPEC_STAGES = ("brief", "research", "bible", "outline")
@@ -99,10 +100,10 @@ ASSET_STAGES = ("graphics",)
 DERIVED_STAGES = ("abridged", "manuscript")
 STAGES = SPEC_STAGES + ASSET_STAGES + DERIVED_STAGES
 STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
-    "brief": (SYNOPSIS_FILE, BRIEF_FILE),
+    "brief": (SYNOPSIS_FILE, BRIEF_FILE, CONFIG_FILE),
     "research": ("kb/research", "kb/sources", "kb/facts"),
     "bible": ("kb/characters", "kb/places", "kb/organizations", "kb/objects",
-              "kb/plot", "kb/themes", "kb/world", "kb/timeline"),
+              "kb/plot", "kb/themes", "kb/world", "kb/timeline", "kb/glossary"),
     "outline": (OUTLINE,),
     "graphics": (GRAPHICS, "kb/graphics"),
     "abridged": (ABRIDGED,),
@@ -110,18 +111,19 @@ STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
 }
 GENERATED = {"kb/INDEX.md"}
 KB_FOLDERS = ("characters", "places", "organizations", "objects", "plot", "themes", "world",
-              "timeline", "facts", "sources", "research", "graphics")
+              "timeline", "facts", "sources", "research", "graphics", "glossary")
 
 TYPES: "OrderedDict[str, str]" = OrderedDict([
     ("CHR", "character"), ("PLC", "place"), ("ORG", "organization"), ("OBJ", "object"),
     ("PLT", "plot element"), ("THM", "theme"), ("WLD", "world rule"), ("TML", "timeline event"),
     ("FCT", "fact"), ("SRC", "source"), ("RQ", "research question"), ("STY", "style rule"),
     ("GFX", "graphic"),
+    ("GLS", "glossary entry"),
     ("EDT", "editorial directive"),
     ("PRT", "part"), ("CHP", "chapter"), ("SCN", "scene"),
 ])
 # KB item types that are expected to be referenced from the outline (unused ones are reported).
-STORY_TYPES = {"CHR", "PLC", "ORG", "OBJ", "PLT", "THM", "WLD", "TML", "FCT", "GFX"}
+STORY_TYPES = {"CHR", "PLC", "ORG", "OBJ", "PLT", "THM", "WLD", "TML", "FCT", "GFX", "GLS"}
 
 
 class NovelError(Exception):
@@ -510,6 +512,314 @@ def front_matter(text: str) -> Dict[str, str]:
     return out
 
 
+def parse_simple_yaml(text: str) -> dict:
+    """Parse a subset of YAML (dicts, lists, scalars, comments) with zero pip dependencies."""
+    lines = text.splitlines()
+    cleaned: List[Tuple[int, str]] = []
+    for line in lines:
+        in_double = False
+        in_single = False
+        comment_idx = -1
+        for i, ch in enumerate(line):
+            if ch == '"' and not in_single:
+                in_double = not in_double
+            elif ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '#' and not in_double and not in_single:
+                comment_idx = i
+                break
+        if comment_idx >= 0:
+            line = line[:comment_idx]
+        if line.strip():
+            indent = len(line) - len(line.lstrip(" "))
+            cleaned.append((indent, line.strip()))
+
+    def parse_val(v: str):
+        v = v.strip()
+        if not v or v in ("null", "~"):
+            return None
+        if v.lower() in ("true", "yes"):
+            return True
+        if v.lower() in ("false", "no"):
+            return False
+        if v == "[]":
+            return []
+        if v == "{}":
+            return {}
+        if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+            return v[1:-1]
+        try:
+            if "." in v:
+                return float(v)
+            return int(v)
+        except ValueError:
+            return v
+
+    def parse_block(idx: int, min_indent: int):
+        if idx >= len(cleaned):
+            return None, idx
+        first_indent, first_line = cleaned[idx]
+        is_list = first_line.startswith("- ")
+
+        if is_list:
+            res_list = []
+            while idx < len(cleaned):
+                indent, line = cleaned[idx]
+                if indent < min_indent or not line.startswith("- "):
+                    break
+                item_content = line[2:].strip()
+                idx += 1
+                if ":" in item_content and not (item_content.startswith('"') or item_content.startswith("'")):
+                    k, v = item_content.split(":", 1)
+                    item_dict = {}
+                    if v.strip():
+                        item_dict[k.strip()] = parse_val(v)
+                    else:
+                        sub, idx = parse_block(idx, indent + 2)
+                        item_dict[k.strip()] = sub
+                    while idx < len(cleaned):
+                        sub_indent, sub_line = cleaned[idx]
+                        if sub_indent <= indent or sub_line.startswith("- "):
+                            break
+                        if ":" in sub_line:
+                            sk, sv = sub_line.split(":", 1)
+                            idx += 1
+                            if sv.strip():
+                                item_dict[sk.strip()] = parse_val(sv)
+                            else:
+                                sub_val, idx = parse_block(idx, sub_indent + 2)
+                                item_dict[sk.strip()] = sub_val
+                        else:
+                            break
+                    res_list.append(item_dict)
+                elif item_content:
+                    res_list.append(parse_val(item_content))
+                else:
+                    sub, idx = parse_block(idx, indent + 2)
+                    res_list.append(sub)
+            return res_list, idx
+        else:
+            res_dict = {}
+            while idx < len(cleaned):
+                indent, line = cleaned[idx]
+                if indent < min_indent or line.startswith("- "):
+                    break
+                if ":" not in line:
+                    idx += 1
+                    continue
+                k, v = line.split(":", 1)
+                k = k.strip()
+                v = v.strip()
+                idx += 1
+                if v:
+                    res_dict[k] = parse_val(v)
+                else:
+                    if idx < len(cleaned) and cleaned[idx][0] > indent:
+                        sub, idx = parse_block(idx, cleaned[idx][0])
+                        res_dict[k] = sub
+                    else:
+                        res_dict[k] = None
+            return res_dict, idx
+
+    res, _ = parse_block(0, 0)
+    return res if isinstance(res, dict) else {}
+
+
+CONFIG_ALLOWED_TOP_KEYS = {
+    "schema_version", "project", "author", "languages",
+    "front_matter", "back_matter", "contributors", "publication",
+    "budget", "locales"
+}
+
+
+@dataclass
+class ProjectConfig:
+    raw: dict = field(default_factory=dict)
+    schema_version: str = "1.0"
+    title: str = "Untitled Novel"
+    subtitle: str = ""
+    edition: str = "1.0.0"
+    copyright_year: Optional[int] = None
+    license: str = "All rights reserved"
+    author_name: str = ""
+    author_legal_name: str = ""
+    author_email: str = ""
+    author_url: str = ""
+    primary_language: str = "en-US"
+    target_languages: List[str] = field(default_factory=lambda: ["en-US"])
+    foreword_path: Optional[str] = None
+    dedication: Optional[str] = None
+    epigraph: Optional[dict] = None
+    include_glossary: bool = True
+    include_bibliography: bool = True
+    historical_note_path: Optional[str] = None
+    afterword_path: Optional[str] = None
+    acknowledgments_path: Optional[str] = None
+    contributors: List[dict] = field(default_factory=list)
+    publication: dict = field(default_factory=dict)
+    budget: dict = field(default_factory=dict)
+    locales: dict = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+
+
+def validate_and_load_config(raw: dict) -> ProjectConfig:
+    errors: List[str] = []
+    if not isinstance(raw, dict):
+        return ProjectConfig(errors=["configuration root must be a mapping/dictionary"])
+
+    # Strict check: unknown top-level keys
+    for k in raw:
+        if k not in CONFIG_ALLOWED_TOP_KEYS:
+            errors.append(f"unknown top-level configuration key '{k}'")
+
+    # Required fields
+    schema_version = str(raw.get("schema_version") or "")
+    if not schema_version:
+        errors.append("missing required field: 'schema_version'")
+
+    proj = raw.get("project")
+    title, subtitle, edition, copyright_year, lic = "Untitled Novel", "", "1.0.0", None, "All rights reserved"
+    if not isinstance(proj, dict):
+        errors.append("missing required section: 'project' (must be a dictionary)")
+    else:
+        title = str(proj.get("title") or "")
+        if not title:
+            errors.append("missing required field: 'project.title'")
+        subtitle = str(proj.get("subtitle") or "")
+        edition = str(proj.get("edition") or "1.0.0")
+        copyright_year = proj.get("copyright_year")
+        lic = str(proj.get("license") or "All rights reserved")
+
+    auth = raw.get("author")
+    author_name, legal_name, email, url = "", "", "", ""
+    if not isinstance(auth, dict):
+        errors.append("missing required section: 'author' (must be a dictionary)")
+    else:
+        author_name = str(auth.get("name") or "")
+        if not author_name:
+            errors.append("missing required field: 'author.name'")
+        legal_name = str(auth.get("legal_name") or "")
+        email = str(auth.get("email") or "")
+        url = str(auth.get("url") or "")
+
+    langs = raw.get("languages")
+    primary_lang = "en-US"
+    target_langs = ["en-US"]
+    if not isinstance(langs, dict):
+        errors.append("missing required section: 'languages' (must be a dictionary)")
+    else:
+        primary_lang = str(langs.get("primary") or "")
+        if not primary_lang:
+            errors.append("missing required field: 'languages.primary'")
+        raw_targets = langs.get("targets")
+        if not isinstance(raw_targets, list) or not raw_targets:
+            errors.append("missing or empty required field: 'languages.targets' (must be a non-empty list of locale codes)")
+        else:
+            target_langs = [str(t) for t in raw_targets]
+            if primary_lang and primary_lang not in target_langs:
+                errors.append(f"primary language '{primary_lang}' must be included in 'languages.targets' {target_langs}")
+
+    fm = raw.get("front_matter") or {}
+    foreword_path = None
+    dedication = None
+    epigraph = None
+    if isinstance(fm, dict):
+        foreword_path = fm.get("foreword")
+        if foreword_path is not None:
+            foreword_path = str(foreword_path)
+        dedication = fm.get("dedication")
+        epigraph = fm.get("epigraph")
+        for k in fm:
+            if k not in {"foreword", "dedication", "epigraph", "preface"}:
+                errors.append(f"unknown key in 'front_matter': '{k}'")
+    elif fm is not None:
+        errors.append("'front_matter' must be a dictionary")
+
+    bm = raw.get("back_matter") or {}
+    include_glossary = True
+    include_bibliography = True
+    historical_note_path = None
+    afterword_path = None
+    acknowledgments_path = None
+    if isinstance(bm, dict):
+        if "include_glossary" in bm:
+            if not isinstance(bm["include_glossary"], bool):
+                errors.append("'back_matter.include_glossary' must be a boolean (true/false)")
+            else:
+                include_glossary = bm["include_glossary"]
+        if "include_bibliography" in bm:
+            if not isinstance(bm["include_bibliography"], bool):
+                errors.append("'back_matter.include_bibliography' must be a boolean (true/false)")
+            else:
+                include_bibliography = bm["include_bibliography"]
+        if bm.get("historical_note"):
+            historical_note_path = str(bm["historical_note"])
+        if bm.get("afterword"):
+            afterword_path = str(bm["afterword"])
+        if bm.get("acknowledgments"):
+            acknowledgments_path = str(bm["acknowledgments"])
+        for k in bm:
+            if k not in {"include_glossary", "include_bibliography", "historical_note", "afterword", "acknowledgments"}:
+                errors.append(f"unknown key in 'back_matter': '{k}'")
+    elif bm is not None:
+        errors.append("'back_matter' must be a dictionary")
+
+    contributors = raw.get("contributors") or []
+    if not isinstance(contributors, list):
+        errors.append("'contributors' must be a list")
+
+    publication = raw.get("publication") or {}
+    budget = raw.get("budget") or {}
+    locales = raw.get("locales") or {}
+
+    return ProjectConfig(
+        raw=raw,
+        schema_version=schema_version or "1.0",
+        title=title,
+        subtitle=subtitle,
+        edition=edition,
+        copyright_year=copyright_year,
+        license=lic,
+        author_name=author_name,
+        author_legal_name=legal_name,
+        author_email=email,
+        author_url=url,
+        primary_language=primary_lang or "en-US",
+        target_languages=target_langs,
+        foreword_path=foreword_path,
+        dedication=dedication,
+        epigraph=epigraph,
+        include_glossary=include_glossary,
+        include_bibliography=include_bibliography,
+        historical_note_path=historical_note_path,
+        afterword_path=afterword_path,
+        acknowledgments_path=acknowledgments_path,
+        contributors=contributors if isinstance(contributors, list) else [],
+        publication=publication if isinstance(publication, dict) else {},
+        budget=budget if isinstance(budget, dict) else {},
+        locales=locales if isinstance(locales, dict) else {},
+        errors=errors,
+    )
+
+
+def load_project_config(git: Git) -> ProjectConfig:
+    yaml_path = git.root / CONFIG_FILE
+    json_path = git.root / CONFIG_FILE_JSON
+    if yaml_path.is_file():
+        try:
+            raw = parse_simple_yaml(yaml_path.read_text(encoding="utf-8", errors="replace"))
+            return validate_and_load_config(raw)
+        except Exception as e:
+            return ProjectConfig(errors=[f"failed to parse {CONFIG_FILE}: {e}"])
+    elif json_path.is_file():
+        try:
+            raw = json.loads(json_path.read_text(encoding="utf-8", errors="replace"))
+            return validate_and_load_config(raw)
+        except Exception as e:
+            return ProjectConfig(errors=[f"failed to parse {CONFIG_FILE_JSON}: {e}"])
+    return ProjectConfig(errors=[f"missing project configuration file: {CONFIG_FILE}"])
+
+
 # ------------------------------------------------------------------ project state
 @dataclass
 class Project:
@@ -517,15 +827,42 @@ class Project:
     plan: Model
     outline: Outline
     layers: Dict[str, Derived]
+    config: ProjectConfig = field(default_factory=ProjectConfig)
+    manuscript_locales: Dict[str, Derived] = field(default_factory=dict)
 
 
 def load_project(git: Git) -> Project:
     plan = build_model(git.working_md(*PLAN_DIRS))
-    layers = {name: derived_of(build_model(git.working_md(d))) for name, d in LAYERS.items()}
-    return Project(git, plan, outline_of(plan), layers)
+    cfg = load_project_config(git)
+
+    abridged_layer = derived_of(build_model(git.working_md(ABRIDGED)))
+
+    manuscript_locales: Dict[str, Derived] = {}
+    for loc in cfg.target_languages:
+        loc_dir = f"{MANUSCRIPT}/{loc}"
+        if (git.root / MANUSCRIPT / loc).is_dir():
+            manuscript_locales[loc] = derived_of(build_model(git.working_md(loc_dir)))
+        else:
+            manuscript_locales[loc] = derived_of(Model())
+
+    flat_manuscript = derived_of(build_model(git.working_md(MANUSCRIPT)))
+    primary_ms = manuscript_locales.get(cfg.primary_language)
+    if not primary_ms or not primary_ms.scenes:
+        if flat_manuscript.scenes:
+            primary_ms = flat_manuscript
+            manuscript_locales[cfg.primary_language] = flat_manuscript
+
+    layers = {
+        "abridged": abridged_layer,
+        "manuscript": primary_ms or derived_of(Model()),
+    }
+    return Project(git, plan, outline_of(plan), layers, cfg, manuscript_locales)
 
 
 def project_title(git: Git) -> str:
+    cfg = load_project_config(git)
+    if cfg.title and not cfg.title.startswith("<") and cfg.title != "Untitled Novel":
+        return cfg.title
     for rel in (BRIEF_FILE, SYNOPSIS_FILE):
         p = git.root / rel
         if p.is_file():
@@ -848,6 +1185,12 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     root = p.git.root
 
     # inputs
+    if p.config.errors:
+        errors += [f"config error: {e}" for e in p.config.errors]
+    if p.config.foreword_path and not (root / p.config.foreword_path).is_file():
+        errors.append(f"config front_matter.foreword references missing file: '{p.config.foreword_path}'")
+    if p.config.historical_note_path and not (root / p.config.historical_note_path).is_file():
+        warnings.append(f"config back_matter.historical_note references missing file: '{p.config.historical_note_path}'")
     if not (root / SYNOPSIS_FILE).is_file():
         errors.append(f"missing seed synopsis: {SYNOPSIS_FILE}")
     style = root / STYLE_FILE
@@ -858,6 +1201,12 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
         if n < MIN_STYLE_WORDS:
             warnings.append(f"{STYLE_FILE} has only {n} words of guidance (excluding comments); a thorough "
                             f"guide (>= {MIN_STYLE_WORDS} words) is expected before writing the manuscript")
+        style_text = style.read_text(encoding="utf-8", errors="replace")
+        for loc in p.config.target_languages:
+            if not re.search(r"^#{1,3}\s+Locale:\s*" + re.escape(loc) + r"\b", style_text, re.I | re.M):
+                warnings.append(f"writing-style guide '{STYLE_FILE}' lacks guidance section for configured locale '{loc}' (expected heading '# Locale: {loc}')")
+        if not re.search(r"^#{1,3}\s+Glossary\s+(?:Guidelines|Criteria)\b", style_text, re.I | re.M):
+            warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Glossary Guidelines' section for automated term discovery")
 
     # catalog integrity
     errors += [f"duplicate ID {d['id']}: {d['first']} and {d['second']}" for d in plan.duplicates]
@@ -914,6 +1263,14 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             errors.append(f"editorial directive {s.id} has invalid or missing 'Status:' ({status_val or 'none'}); must be one of {', '.join(sorted(valid_edt_statuses))} ({s.location})")
         elif status_val == "open":
             open_edts.append(s)
+        loc_val = (s.field_value("locale", "lang", "language") or "").strip()
+        if not loc_val:
+            if len(p.config.target_languages) > 1:
+                errors.append(f"editorial directive {s.id} is missing required 'Locale:' field ({s.location}); must be 'all' or one of {', '.join(p.config.target_languages)}")
+            else:
+                warnings.append(f"editorial directive {s.id} is missing 'Locale:' field (defaults to 'all') ({s.location})")
+        elif loc_val.lower() not in ("all", "global") and loc_val not in p.config.target_languages:
+            errors.append(f"editorial directive {s.id} has invalid 'Locale:' '{loc_val}' ({s.location}); must be 'all' or one of {', '.join(p.config.target_languages)}")
 
     if open_edts:
         infos.append(f"{len(open_edts)} open editorial directive(s): " + ", ".join(s.id for s in open_edts))
@@ -931,6 +1288,46 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             rel_file = target_path or f"graphics/{s.id}.png"
             if not (root / rel_file).is_file():
                 warnings.append(f"active graphic {s.id} ({s.title}) in Story DAG has missing rendered file '{rel_file}'")
+
+    # localized graphics references verification
+    img_ref_pattern = re.compile(r"""(?:!\[.*?\]\((?P<url1>[^)\s]+)\)|(?P<url2>(?:graphics/)?[a-zA-Z0-9_\-\./]+\.(?:png|svg|jpg|jpeg|webp)))""", re.I)
+    gfx_filename_pattern = re.compile(r"""(?:^|.*/)(?P<id>GFX-\d{3,})(?:\.(?P<locale>[a-zA-Z0-9_-]+))?\.(?P<ext>png|svg|jpg|jpeg|webp)$""", re.I)
+
+    for loc in p.config.target_languages:
+        loc_ms_dir = root / MANUSCRIPT / loc
+        target_files = []
+        if loc_ms_dir.is_dir():
+            target_files = sorted(loc_ms_dir.glob("*.md"))
+        elif loc == p.config.primary_language and (root / MANUSCRIPT).is_dir():
+            target_files = [f for f in (root / MANUSCRIPT).glob("*.md") if f.name != Path(STYLE_FILE).name]
+
+        for mf in target_files:
+            rel = mf.relative_to(root).as_posix()
+            text = mf.read_text(encoding="utf-8", errors="replace")
+            for line_no, line in enumerate(text.splitlines(), 1):
+                for match in img_ref_pattern.finditer(line):
+                    url = match.group("url1") or match.group("url2")
+                    if not url or "http://" in url or "https://" in url:
+                        continue
+                    gm = gfx_filename_pattern.search(url)
+                    if not gm:
+                        continue
+                    gid = gm.group("id")
+                    file_loc = gm.group("locale")
+                    ext = gm.group("ext")
+
+                    gsec = plan.defs.get(gid)
+                    expected_loc_path = f"graphics/{gid}.{loc}.{ext}"
+                    has_loc_file = (root / expected_loc_path).is_file()
+                    has_text = gsec and (gsec.has_field("has-text") or re.search(r"###\s+" + re.escape(loc), gsec.text))
+
+                    if has_loc_file or has_text:
+                        if file_loc != loc:
+                            errors.append(f"manuscript '{rel}:{line_no}' (locale: {loc}) references mismatched graphic '{url}'; expected localized version '{expected_loc_path}'")
+                    else:
+                        norm_url = url.replace("../", "").lstrip("./")
+                        if not (root / norm_url).is_file() and not (root / "graphics" / norm_url).is_file():
+                            warnings.append(f"manuscript '{rel}:{line_no}' references missing graphic asset '{url}'")
 
     # usage
     outline_refs: Set[str] = set()
@@ -1147,14 +1544,14 @@ def compute_graphics_impact(p: Project) -> dict:
     }
 
 
-def compute_impact(p: Project, stage: str) -> dict:
+def compute_impact(p: Project, stage: str, locale: Optional[str] = None) -> dict:
     git, plan, o = p.git, p.plan, p.outline
     base = git.baseline(stage)
     old_plan = build_model(git.commit_md(base, *PLAN_DIRS))
     old_o = outline_of(old_plan)
     changes = diff_models(old_plan, plan)
     changed_ids = {c.id for c in changes if c.id}
-    target = p.layers[stage]
+    target = p.manuscript_locales.get(locale, p.layers[stage]) if (stage == "manuscript" and locale) else p.layers[stage]
     ab_old = derived_of(build_model(git.commit_md(base, ABRIDGED))) if stage == "manuscript" else None
     ab_now = p.layers["abridged"]
 
@@ -1166,6 +1563,9 @@ def compute_impact(p: Project, stage: str) -> dict:
             continue
         edt_stage = (edt.field_value("stage") or "").lower()
         if edt_stage != "all" and edt_stage != stage:
+            continue
+        edt_loc = (edt.field_value("locale", "lang", "language") or "all").lower()
+        if locale and edt_loc not in ("all", "global", locale.lower()):
             continue
         target_val = (edt.field_value("target") or "").strip()
         if "global" in target_val.lower():
@@ -1285,7 +1685,7 @@ def cmd_init(root: Path, args) -> int:
                     print(f"created  {rel.as_posix()}")
     else:
         print(f"warning: templates not found at {templates}", file=sys.stderr)
-    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + ["story/editorial", GRAPHICS, OUTLINE, ABRIDGED, MANUSCRIPT]:
+    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + ["story/editorial", GRAPHICS, OUTLINE, ABRIDGED, MANUSCRIPT, f"{MANUSCRIPT}/en-US"]:
         p = git.root / d
         if not p.exists():
             p.mkdir(parents=True)
@@ -1816,11 +2216,113 @@ def cmd_stats(git: Git, args) -> int:
     return 0
 
 
+def generate_bibliography_markdown(p: Project) -> Tuple[str, List[str], List[str]]:
+    git, plan = p.git, p.plan
+    dag = build_story_dag(p)
+
+    active_facts: Set[str] = set()
+    for sid in p.outline.scenes:
+        sec = plan.defs.get(sid)
+        if sec:
+            for rid in sec.ref_ids():
+                if rid.startswith("FCT-"):
+                    active_facts.add(rid)
+        for a in ancestors(plan, sid):
+            for rid in a.ref_ids():
+                if rid.startswith("FCT-"):
+                    active_facts.add(rid)
+
+    for nid in dag.nodes:
+        if nid.startswith("FCT-"):
+            active_facts.add(nid)
+        sec = plan.defs.get(nid)
+        if sec:
+            for rid in sec.ref_ids():
+                if rid.startswith("FCT-"):
+                    active_facts.add(rid)
+
+    active_sources: Dict[str, Set[str]] = {}
+    for fid in sorted(active_facts):
+        fsec = plan.defs.get(fid)
+        if not fsec:
+            continue
+        for rid in fsec.ref_ids():
+            if rid.startswith("SRC-"):
+                active_sources.setdefault(rid, set()).add(fid)
+
+    by_type: Dict[str, List[Tuple[str, Section, Set[str]]]] = {}
+    for s_id, f_ids in active_sources.items():
+        s_sec = plan.defs.get(s_id)
+        if not s_sec:
+            continue
+        stype = (s_sec.field_value("type") or "other").strip().title()
+        by_type.setdefault(stype, []).append((s_id, s_sec, f_ids))
+
+    lines = ["# Bibliography", ""]
+
+    if not active_sources:
+        lines.append("*(No historical or empirical sources attached to active story elements.)*")
+    else:
+        for stype in sorted(by_type):
+            lines.append(f"## {stype} Sources")
+            lines.append("")
+            for s_id, s_sec, f_ids in sorted(by_type[stype], key=lambda t: t[1].title):
+                citation = s_sec.field_value("citation") or s_sec.title
+                url = s_sec.field_value("url")
+                accessed = s_sec.field_value("accessed")
+                supported = ", ".join(sorted(f"[[{fid}]]" for fid in f_ids))
+
+                line = f"- **{s_id}**: {citation}."
+                if url:
+                    line += f" <{url}>"
+                if accessed:
+                    line += f" (accessed {accessed})."
+                if supported:
+                    line += f" *[Supports: {supported}]*"
+                lines.append(line)
+            lines.append("")
+
+    return "\n".join(lines).strip(), sorted(active_facts), sorted(active_sources.keys())
+
+
+def cmd_bibliography(git: Git, args) -> int:
+    p = load_project(git)
+    md_text, facts, sources = generate_bibliography_markdown(p)
+    if args.json:
+        emit_json({
+            "activeFacts": facts,
+            "activeSources": sources,
+            "markdown": md_text,
+        })
+        return 0
+    if args.output:
+        out_p = Path(args.output)
+        if not out_p.is_absolute():
+            out_p = git.root / out_p
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        out_p.write_text(md_text + "\n", encoding="utf-8")
+        print(f"Wrote bibliography to {out_p.relative_to(git.root).as_posix()} ({len(sources)} sources cited by {len(facts)} facts)")
+    else:
+        print(md_text)
+    return 0
+
+
 def cmd_compile(git: Git, args) -> int:
     p = load_project(git)
-    d = p.layers[args.layer]
+    target_locale = getattr(args, "locale", None) or p.config.primary_language
+    if args.layer == "manuscript" and target_locale in p.manuscript_locales and p.manuscript_locales[target_locale].scenes:
+        d = p.manuscript_locales[target_locale]
+    else:
+        d = p.layers[args.layer]
     title = project_title(git)
     out = ["---", f"title: \"{title}\"", "---", ""]
+
+    # Optional Foreword
+    if p.config.foreword_path:
+        fwd_p = git.root / p.config.foreword_path
+        if fwd_p.is_file():
+            out += ["# Foreword", ""] + fwd_p.read_text(encoding="utf-8").splitlines() + [""]
+
     has_parts = bool(p.outline.parts)
     cur_part, part_no, missing = None, 0, []
     for n, cid in enumerate(p.outline.chapters, 1):
@@ -1843,9 +2345,31 @@ def cmd_compile(git: Git, args) -> int:
             if i:
                 out += [args.scene_break, ""]
             out += clean_prose(d.scenes[sid].body) + [""]
+
+    # Optional Glossary
+    if p.config.include_glossary:
+        glossary_items = p.plan.of_type("GLS")
+        if glossary_items:
+            out += ["# Glossary", ""]
+            for item in sorted(glossary_items, key=lambda it: it.title):
+                loc_filter = (item.field_value("locale", "locales") or "all").lower()
+                if loc_filter not in ("all", "global", target_locale.lower()):
+                    continue
+                defn = item.field_value("definition") or "\n".join(item.body).strip()
+                pron = item.field_value("pronunciation")
+                pron_str = f" *({pron})*" if pron else ""
+                out.append(f"- **{item.title}**{pron_str}: {defn}")
+            out.append("")
+
+    # Optional Bibliography
+    if p.config.include_bibliography:
+        bib_md, _, _ = generate_bibliography_markdown(p)
+        out += [bib_md, ""]
+
     dst_dir = git.root / BUILD
     dst_dir.mkdir(exist_ok=True)
-    md = dst_dir / f"{args.layer}.md"
+    suffix = f".{target_locale}" if args.layer == "manuscript" and len(p.config.target_languages) > 1 else ""
+    md = dst_dir / f"{args.layer}{suffix}.md"
     md.write_text("\n".join(out), encoding="utf-8")
     words = sum(word_count(s.body) for s in d.scenes.values())
     print(f"Wrote {md.relative_to(git.root).as_posix()} ({words:,} words)")
@@ -1855,7 +2379,7 @@ def cmd_compile(git: Git, args) -> int:
         pandoc = shutil.which("pandoc")
         if not pandoc:
             raise NovelError("pandoc is required for --format " + args.format + " (https://pandoc.org)")
-        dst = dst_dir / f"{args.layer}.{args.format}"
+        dst = dst_dir / f"{args.layer}{suffix}.{args.format}"
         subprocess.run([pandoc, str(md), "-o", str(dst)], check=True)
         print(f"Wrote {dst.relative_to(git.root).as_posix()}")
     return 0
@@ -1881,6 +2405,7 @@ def cmd_feedback(git: Git, args) -> int:
     target_filter = args.id
     status_filter = (args.status or "open").lower()
     stage_filter = (args.stage or "").lower()
+    locale_filter = (getattr(args, "locale", None) or "").lower()
 
     matched: List[Section] = []
     for s in edts:
@@ -1889,6 +2414,9 @@ def cmd_feedback(git: Git, args) -> int:
             continue
         stage = (s.field_value("stage") or "").lower()
         if stage_filter and stage_filter != "all" and stage != "all" and stage != stage_filter:
+            continue
+        loc = (s.field_value("locale", "lang", "language") or "all").lower()
+        if locale_filter and locale_filter != "all" and loc not in ("all", "global", locale_filter):
             continue
         if target_filter:
             if target_filter == s.id:
@@ -1915,6 +2443,7 @@ def cmd_feedback(git: Git, args) -> int:
                 "target": s.field_value("target"),
                 "stage": s.field_value("stage"),
                 "status": s.field_value("status"),
+                "locale": s.field_value("locale") or "all",
                 "file": s.file,
                 "text": s.text
             })
@@ -1930,13 +2459,14 @@ def cmd_feedback(git: Git, args) -> int:
         print(matched[0].text)
         return 0
 
-    out = ["| ID | Target | Stage | Status | Title |",
-           "|----|--------|-------|--------|-------|"]
+    out = ["| ID | Target | Stage | Status | Locale | Title |",
+           "|----|--------|-------|--------|--------|-------|"]
     for s in matched:
         tgt = s.field_value("target") or "-"
         stg = s.field_value("stage") or "-"
         st = s.field_value("status") or "-"
-        out.append(f"| {s.id} | {tgt} | {stg} | {st} | {s.title} |")
+        loc = s.field_value("locale") or "all"
+        out.append(f"| {s.id} | {tgt} | {stg} | {st} | {loc} | {s.title} |")
     print("\n".join(out))
     return 0
 
@@ -2069,14 +2599,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("accept", "commit and advance one or more stage baselines"),
              ("feedback", "list and inspect editorial directives (story/editorial/EDT-xxx)"),
              ("placeholders", "scan and convert placeholders into research questions (RQ)"),
+             ("bibliography", "auto-generate bibliography from facts attached to the Story DAG"),
              ("index", "regenerate kb/INDEX.md (catalog of all IDs)"),
              ("stats", "word counts per chapter/scene vs targets"),
              ("compile", "assemble the novel in reading order into build/"),
              ("log", "list sync commits")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders", "bibliography"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
+        if name == "bibliography":
+            p.add_argument("--format", choices=["md", "json"], default="md")
+            p.add_argument("--output", help="write bibliography to output file")
         if name == "placeholders":
             p.add_argument("path", nargs="?", help="optional file or directory to scan (default: all plan dirs)")
             p.add_argument("--create-rq", action="store_true", help="automatically create RQ entries in kb/research/questions.md")
@@ -2094,12 +2628,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--stage", choices=list(STAGES) + ["plan", "all"], default="plan", help="baseline to compare against")
         if name == "impact":
             p.add_argument("--stage", choices=list(LAYERS) + ["graphics"], required=True)
+            p.add_argument("--locale", help="filter manuscript impact by locale")
         if name == "feedback":
             p.add_argument("id", nargs="?", help="optional target scene/chapter ID (e.g. SCN-014) or EDT-xxx ID")
             p.add_argument("--status", choices=["open", "applied", "superseded", "wontfix", "all"], default="open",
                            help="filter by directive status (default: open)")
             p.add_argument("--stage", choices=["outline", "abridged", "manuscript", "all"],
                            help="filter by target stage")
+            p.add_argument("--locale", help="filter by directive locale (e.g. all, fr-FR)")
         if name == "accept":
             p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["plan", "all"])
             p.add_argument("--asset", action="append", help="specific asset ID(s) to accept (e.g. GFX-001)")
@@ -2109,6 +2645,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--scenes", action="store_true", help="include per-scene rows")
         if name == "compile":
             p.add_argument("--layer", choices=list(LAYERS), default="manuscript")
+            p.add_argument("--locale", help="target manuscript locale (default: primary from config)")
             p.add_argument("--format", choices=["md", "docx", "epub", "odt", "pdf", "html"], default="md")
             p.add_argument("--chapter-heading", default="Chapter {N}: {title}",
                            help="format; fields {n} (1), {N} (One), {title}")
@@ -2123,7 +2660,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
                 "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
                 "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback,
-                "placeholders": cmd_placeholders}
+                "placeholders": cmd_placeholders, "bibliography": cmd_bibliography}
     try:
         if args.command == "init":
             return cmd_init(root, args)

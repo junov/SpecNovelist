@@ -62,14 +62,14 @@ python scripts/specnovel.py check
 - Ensure the corresponding chapter and scene exist in `abridged/`. `novel-write` never generates
   prose directly from an outline without an abridged draft.
 
-### 3. Load Context per Scene
-For each target scene (`SCN-xxx`):
+### 3. Load Context per Scene and Locale
+For each target scene (`SCN-xxx`) and target locale (`<locale>` from `story/config.yaml`):
 1. **Read `abridged/CHP-xxx.md`**: Isolate the scene's abridged narrative. Note every action beat,
    every line of dialogue, and the final emotional/value shift.
-2. **Read `story/style.md`**: Review:
+2. **Read `story/style.md`**: Review general style guidelines plus any `# Locale: <locale>` sections:
    - POV person, tense, and psychic distance.
    - Sentence length distribution and paragraph cadence.
-   - Dialogue tag rules (e.g. *"said/asked only; no adverbs"*).
+   - Dialogue tag rules, typographical conventions (e.g. French em-dash/guillemets vs. English quotes).
    - Sensory priorities and metaphor guidelines.
    - Anti-patterns and banned words/tropes.
    - Touchstone passages and voice anchors.
@@ -80,14 +80,14 @@ For each target scene (`SCN-xxx`):
    - `FCT`: Sourced textures, period-accurate objects, specialized vocabulary, procedures.
    - `WLD`: Physical constraints of speculative rules.
 4. **Target word count**: Check the scene's target word count in `outline/` (or via `specnovel.py stats`).
-5. **Read active editorial directives**: Run `specnovel.py feedback SCN-xxx` (or inspect `story/editorial/`)
-   to retrieve all open `EDT` directives targeting this scene, its enclosing chapter, or global scope.
+5. **Read active editorial directives**: Run `specnovel.py feedback SCN-xxx --locale <locale>`
+   to retrieve all open `EDT` directives targeting this scene, its enclosing chapter, or global scope for this locale.
 
 ### 4. Synthesize the Manuscript Scene
-Draft the prose under `manuscript/CHP-xxx.md`:
+Draft the prose under `manuscript/<locale>/CHP-xxx.md` (or flat `manuscript/CHP-xxx.md` for legacy single-language projects):
 - **Preserve 100% of the Plot and Dialogue**: Retain all dialogue lines from the abridged draft,
   enriching beats with physical action, micro-expressions, pauses, and subtext.
-- **Enforce Active Editorial Directives**: Address every open `EDT` directive retrieved for this scene,
+- **Enforce Active Editorial Directives**: Address every open `EDT` directive retrieved for this scene and locale,
   refining character reactions, prose texture, or blocking exactly as directed.
 - **Clarify Time and Space Transitions**: Leverage the Time and Place metadata from advanced `PLT`
   items (alongside scene `When:` and `Where:`) to anchor the reader. Explicitly render temporal distance
@@ -97,7 +97,9 @@ Draft the prose under `manuscript/CHP-xxx.md`:
   palette from `PLC` and historical details from `FCT`. Avoid generic descriptions.
 - **Filter Exposition through the POV**: Researched facts must never read like encyclopedia
   entries. Deliver them through what the POV character notices, uses, or worries about.
-- **Enforce Style Constraints**: Strictly observe every rule in `story/style.md`. Do not slip into
+- **Embed Localized Graphics**: When embedding graphics, link to the localized asset (`![Caption](../../graphics/GFX-001.fr-FR.png)`)
+  if text labels exist, or fallback to the base asset (`![Caption](../../graphics/GFX-001.png)`).
+- **Enforce Style Constraints**: Strictly observe every rule in `story/style.md` and `# Locale: <locale>`. Do not slip into
   clichés, generic AI syntax ("a testament to", "tapestry of"), or modern idioms in historical settings.
 - **Clean Output**: Do not leave raw wiki-style tags (`[[CHR-001]]`) visible in the prose. Use natural
   character names and descriptions. (Markdown comments `<!-- note -->` may be retained if needed).

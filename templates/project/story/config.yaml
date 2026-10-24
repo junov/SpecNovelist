@@ -1,0 +1,50 @@
+schema_version: "1.0"
+
+project:
+  title: "Untitled Novel"
+  subtitle: ""
+  edition: "1.0.0"
+  copyright_year: 2026
+  license: "All rights reserved"
+
+author:
+  name: "Author Name"
+  legal_name: ""
+  email: ""
+  url: ""
+
+languages:
+  primary: "en-US"
+  targets:
+    - "en-US"
+
+front_matter:
+  foreword: null
+  dedication: null
+  epigraph: null
+
+back_matter:
+  include_glossary: true
+  include_bibliography: true
+  historical_note: null
+  afterword: null
+  acknowledgments: null
+
+contributors: []
+
+publication:
+  publisher: ""
+  imprint: ""
+  isbn: {}
+
+budget:
+  target_words: 80000
+  tolerance_pct: 10
+  expansion_factors:
+    en-US: 1.00
+
+locales:
+  en-US:
+    quotes: "curly_double"
+    scene_break: "* * *"
+    date_format: "MMMM D, YYYY"

@@ -119,3 +119,18 @@ TBD
      voice, each followed by a note on which features to imitate. These are the strongest
      signal for the writing agent. -->
 TBD
+
+## Glossary Guidelines
+<!-- Criteria for terms automatically candidate-selected for the glossary:
+     - Specialized nautical, medical, military, or historical technical jargon
+     - Dialect terms, colloquialisms, or foreign loanwords not translated inline
+     - Invented world-building objects or cultural practices
+     - Rules for definition length and style (concise, accessible, spoiler-free) -->
+TBD
+
+# Locale: en-US
+<!-- Specific conventions for en-US:
+     - American English spelling and punctuation (serial commas, double quotes)
+     - Dialogue conventions (em dashes, tag punctuation)
+     - Handling of non-English terms in dialogue vs prose -->
+TBD

@@ -124,11 +124,14 @@ Present a concise summary of the abridged changes to the author:
 ### 6. Synchronize the Manuscript Layer (`manuscript/`)
 For each scene flagged under `impact --stage manuscript`:
 - Use the `novel-write` skill conventions.
-- Read the updated abridged scene, `story/style.md`, and referenced `kb/` entries (`PLC`, `FCT`, `CHR`, `WLD`).
-- Embed active rendered graphics from `graphics/` with literary captions.
-- Render the full literary prose under `manuscript/CHP-xxx.md`.
+- Consult `story/config.yaml` for configured `languages.targets`.
+- For each target locale (e.g. `en-US`, `fr-FR`):
+  - Read the updated abridged scene, `story/style.md` (including `# Locale: <locale>` sections), and referenced `kb/` entries.
+  - Ingest active editorial directives targeting this scene and locale (`specnovel.py feedback SCN-xxx --locale <locale>`).
+  - Embed active rendered graphics from `graphics/`, using localized assets (`graphics/GFX-NNN.<locale>.png`) if text labels exist, or base assets (`graphics/GFX-NNN.png`) as fallback.
+  - Render literary prose under `manuscript/<locale>/CHP-xxx.md` (or flat `manuscript/` for single-language legacy projects).
 - Match target word count budgets (`specnovel.py stats`).
-- If an outline scene was removed, prune it from `manuscript/`.
+- If an outline scene was removed, prune it from all manuscript subdirectories.
 
 ### 7. Automated Validation and Integrity Check
 Run:
@@ -139,8 +142,9 @@ python scripts/specnovel.py stats
 ```
 Verify that:
 - Story Causality DAG is acyclic, reading order coherence is preserved (all prerequisites precede their dependents), and every element has a path to the root denouement.
-- Every scene in the outline exists in both `abridged/` and `manuscript/` in the correct reading order.
-- All active graphics referenced by the Story DAG exist on disk under `graphics/`.
+- Project configuration (`story/config.yaml`) validates against schema and foreword paths resolve.
+- Every scene in the outline exists in both `abridged/` and `manuscript/` (for all configured locales) in the correct reading order.
+- All active graphics referenced by the Story DAG exist on disk under `graphics/`, and localized graphic references in manuscript files point to matching locale versions or valid base fallbacks.
 - No dangling references or orphan scenes exist.
 - No raw `[[ID]]` tags appear in the visible manuscript prose.
 - Fact citations and source records remain valid.
@@ -175,6 +179,14 @@ Novel-Abridged-Updated: SCN-014
 Novel-Manuscript-Updated: SCN-014
 ```
 This commit becomes the new baseline for future deltas.
+
+### 10. Compile Deliverables (Optional)
+When publishing drafts or deliverable books:
+```bash
+python scripts/specnovel.py compile --format epub --locale en-US
+python scripts/specnovel.py bibliography --format md
+```
+`compile` automatically incorporates the foreword (if enabled), candidate glossary entries (`GLS`), and DAG-filtered bibliographies into `build/`.
 
 ---
 

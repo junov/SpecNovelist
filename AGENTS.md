@@ -10,22 +10,25 @@ by AI writing agents.
 ## 1. Top-Level Folder Roles
 
 - **`story/`**: **Human-Owned Inputs & Style Mandate.**
+  - `config.yaml`: **The Project Configuration Specification.** Follows a strict schema containing Author Identity,
+    target languages (with designated primary), optional foreword path, bibliography and glossary compilation toggles,
+    and publication metadata.
   - `synopsis.md`: The seed synopsis. Never rewritten by agents without explicit author approval.
   - `brief.md`: Interview decisions: premise, genre, audience, length, POV, setting eras, research rigor.
   - `style.md`: **Binding writing-style guide** for the manuscript. Dictates voice, rhythm, POV, diction,
-    dialogue conventions, interiority, and anti-patterns.
+    dialogue conventions, interiority, glossary guidelines, and locale-specific sections (`# Locale: <locale>`).
   - `editorial/`: **The Editorial Feedback Database (`EDT-NNN.md`).** Records situational, scene-specific, or
-    prose-level feedback that does not promote to top-level style/KB, ensuring it persists and is re-applied
-    whenever artifacts are re-rendered.
+    prose-level feedback that does not promote to top-level style/KB, tagged by target locale (`Locale: all` vs `Locale: fr-FR`).
 - **`kb/`**: **The Knowledge Base (Story Bible & Fact Repository).**
   - Characters (`CHR`), Places (`PLC`), Organizations (`ORG`), Objects (`OBJ`), Plot Elements (`PLT`),
-    Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Graphics (`GFX`), Researched Facts (`FCT`), Sources (`SRC`),
-    and Research Questions (`RQ`).
+    Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Graphics (`GFX`), Glossary Entries (`GLS`),
+    Researched Facts (`FCT`), Sources (`SRC`), and Research Questions (`RQ`).
   - Plot elements (`PLT`) must carry valid time and place metadata to orient spatiotemporal transitions.
   - Cataloged with unique, permanent IDs (`PREFIX-NNN`) and cross-referenced with `[[ID]]` wiki-links.
 - **`graphics/`**: **Rendered Graphical Assets.**
   - Stores rendered images, diagrams, charts, maps, artwork, and book covers rendered by the `graphics` sync stage
-    and embedded in `abridged/` and `manuscript/`.
+    and embedded in `abridged/` and `manuscript/`. Multilingual assets are tagged by locale suffix (`GFX-xxx.<locale>.png`),
+    falling back to primary or unlocalized assets when no text labels exist.
 - **`outline/`**: **The Skeleton of the Novel in Reading Order.**
   - Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`).
   - Sets up when, where, cast, plot movement, sourced facts, goal/conflict/outcome, beats, key dialogue,
@@ -35,9 +38,10 @@ by AI writing agents.
     than the final novel. One file per chapter (`CHP-001.md`).
 - **`manuscript/`**: **Derived Final Artifact (Polished Prose).**
   - The final novel, rendered from `abridged/` + `story/style.md` + `kb/`. Clean, immersive prose with
-    zero visible metadata. One file per chapter (`CHP-001.md`).
+    zero visible metadata. Organized in subdirectories by locale (`manuscript/<locale>/CHP-001.md`).
 - **`build/`**: **Compiled Books.**
-  - Generated compiled output in markdown, docx, epub, or pdf via `specnovel.py compile`.
+  - Generated compiled output in markdown, docx, epub, or pdf via `specnovel.py compile`, with auto-generated
+    bibliographies and glossaries.
 
 ---
 
@@ -100,6 +104,25 @@ by AI writing agents.
    - **Per-Asset Sync Tracking**: Sync baselines are recorded per asset via `Novel-GFX-Sync: GFX-NNN` trailers.
      When an asset is newly re-referenced in the story DAG, the engine inspects its per-asset baseline to report
      exactly how far out of sync it is (commits behind HEAD and which upstream prerequisites changed).
+
+10. **Strict Project Configuration Compliance**:
+    `story/config.yaml` is the project configuration source of truth and must conform to its strict schema.
+    It defines Author Identity, target locales (with one designated primary), optional foreword file paths,
+    compilation toggles (glossary, bibliography), and publication metadata. Any changes to supported
+    locales or front/back matter must be declared in `config.yaml` and validated via `python scripts/specnovel.py check`.
+11. **Multilingual Manuscript & Localized Graphics Compliance**:
+    Manuscripts targeting multiple languages are organized in dedicated subdirectories: `manuscript/<locale>/CHP-NNN.md`.
+    - Style guidelines provide locale-specific sections (`# Locale: <locale>`) for grammar, rhythm, and idioms.
+    - Editorial feedback directives (`EDT-NNN.md`) specify their target locale (`Locale: all` or specific locale like `fr-FR`).
+    - Graphics assets with text labels must provide localized versions suffixed with the locale (`GFX-NNN.<locale>.png`)
+      or fallback cleanly to the primary/unlocalized version.
+    - Automated checks (`python scripts/specnovel.py check`) enforce that manuscript files link to the correct localized
+      graphics asset or valid fallback.
+12. **DAG-Filtered Bibliography & Style-Guided Glossary**:
+    - Bibliographical citations in compiled manuscripts are strictly generated from facts attached to the story DAG
+      via `python scripts/specnovel.py bibliography`. Sources citing detached or pruned facts are excluded.
+    - Glossary terms (`GLS`) are authored according to `## Glossary Guidelines` in `story/style.md`, refined
+      via editorial directives, and automatically injected into compiled books when enabled in `story/config.yaml`.
 
 ---
 

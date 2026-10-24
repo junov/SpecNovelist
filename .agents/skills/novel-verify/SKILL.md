@@ -52,13 +52,15 @@ Verifies:
   - **Reading Order**: Every element in the outline is preceded by all its prerequisites.
   - **Denouement Essentiality**: Every element in the story has a directed causal path to the novel's final denouement root (no dead-ends or inessential scenes).
 - **Integrity & References**:
-  - All cataloged IDs are unique across the project.
+  - `story/config.yaml` conforms strictly to the schema (author identity, target languages, foreword path if enabled, compilation flags).
+  - All cataloged IDs are unique across the project (including `GLS` glossary entries).
   - No dangling wiki-links (`[[ID]]`) exist.
   - All plot elements (`PLT`) carry valid Time and Place metadata for transition clarity.
-  - All editorial directives (`EDT`) carry valid Target, Stage, and Status metadata.
+  - All editorial directives (`EDT`) carry valid Target, Stage, Status, and Locale metadata (`Locale: all` or in configured targets).
   - All researched facts (`FCT`) cite valid source records (`SRC`).
   - Every source has an accessible URL or full bibliographic citation.
-  - Derived chapters and scenes in `abridged/` and `manuscript/` match the outline in order and hierarchy.
+  - Derived chapters and scenes in `abridged/` and `manuscript/<locale>/` match the outline in order and hierarchy.
+  - Localized graphics references in manuscript files match the chapter's locale (`GFX-NNN.<locale>.png`) or fallback cleanly to base assets without text.
   - No visible `[[ID]]` markup leaks into final manuscript prose.
 
 To inspect the traceability and usage matrix for any character, place, or fact:
@@ -112,17 +114,20 @@ Audits whether the manuscript honors the researched facts cataloged in `kb/facts
 
 ## 4. Style Compliance Audit
 
-Audits `manuscript/` against `story/style.md`:
-1. **Anti-pattern Scan**:
+Audits `manuscript/<locale>/` against `story/style.md` and `# Locale: <locale>`:
+1. **Locale-Specific Sections & Glossary Guidelines**:
+   - Verify that `story/style.md` contains `# Locale: <locale>` sections for each language target configured in `story/config.yaml`.
+   - Verify that `## Glossary Guidelines` are defined if glossary compilation is enabled.
+2. **Anti-pattern Scan**:
    - Search manuscript files for forbidden clichés, filter words ("she heard", "he felt"), and
      generic AI-isms ("tapestry", "testament to", "breath she didn't know").
-2. **Dialogue Tag Discipline**:
+3. **Dialogue Tag Discipline**:
    - Verify that dialogue tags adhere to `style.md` rules (e.g. no adverbs on tags; action beats instead
-     of exotic verbs like *"retorted", "expounded"*).
-3. **POV and Tense Consistency**:
+     of exotic verbs like *"retorted", "expounded"*; dialogue dashes or guillemets in appropriate locales).
+4. **POV and Tense Consistency**:
    - Ensure the prose maintains the specified POV (e.g. close third, past tense) without accidental
      head-hopping or tense slippage.
-4. **Sentence Rhythm & Pacing**:
+5. **Sentence Rhythm & Pacing**:
    - Check that action scenes use crisper sentence cadence, and reflective scenes allow deeper interiority.
 
 ---

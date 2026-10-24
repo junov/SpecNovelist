@@ -77,7 +77,7 @@ class ProjectTest(unittest.TestCase):
         self.git("config", "user.email", "t@example.com")
         self.git("config", "user.name", "Test")
         self.write("story/synopsis.md", "---\ntitle: The Crossing\n---\n# Synopsis\n" + "word " * 50)
-        self.write("story/style.md", "# Style\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n" + "rule " * 500)
         self.write("kb/characters/CHR-001-elena.md", CHAR)
         self.write("kb/characters/CHR-002-karl.md", CHAR2)
         self.write("kb/places/PLC-001-harbor.md", PLACE)
@@ -597,6 +597,195 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
 
         log_out2 = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=self.root, capture_output=True, text=True, check=True).stdout
         self.assertIn("Novel-GFX-Sync: GFX-002", log_out2)
+
+    def test_config_schema_validation(self):
+        # 1. Invalid schema: unknown top-level key
+        bad_config = """\
+schema_version: "1.0"
+unknown_key: "invalid"
+project:
+  title: "Valid Title"
+author:
+  name: "Author"
+languages:
+  primary: "en-US"
+  targets:
+    - "en-US"
+"""
+        self.write("story/config.yaml", bad_config)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("unknown top-level configuration key 'unknown_key'" in e for e in res["errors"]))
+
+        # 2. Invalid schema: primary language not in targets
+        mismatched_langs = """\
+schema_version: "1.0"
+project:
+  title: "Valid Title"
+author:
+  name: "Author"
+languages:
+  primary: "de-DE"
+  targets:
+    - "en-US"
+    - "fr-FR"
+"""
+        self.write("story/config.yaml", mismatched_langs)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("primary language 'de-DE' must be included in 'languages.targets'" in e for e in res["errors"]))
+
+        # 3. Missing foreword file
+        fwd_config = """\
+schema_version: "1.0"
+project:
+  title: "Valid Title"
+author:
+  name: "Author"
+languages:
+  primary: "en-US"
+  targets:
+    - "en-US"
+front_matter:
+  foreword: "story/missing_foreword.md"
+"""
+        self.write("story/config.yaml", fwd_config)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("front_matter.foreword references missing file" in e for e in res["errors"]))
+
+    def test_bibliography_filtered_by_dag(self):
+        # Add an unattached fact and source to KB
+        self.write("kb/sources/unattached_source.md", "## SRC-002: Maritime Archive\n- **Type:** archival\n- **Citation:** Naval Records 1912\n")
+        self.write("kb/facts/unattached_fact.md", "## FCT-002: Sea temperature\n**Statement:** 31 degrees.\n**Sources:**\n- [[SRC-002]]\n")
+
+        # FCT-001 / SRC-001 is attached to SCN-002 in outline. FCT-002 / SRC-002 is not attached to any scene.
+        code, bib_res = self.json_cli("bibliography")
+        self.assertEqual(code, 0)
+        self.assertIn("FCT-001", bib_res["activeFacts"])
+        self.assertNotIn("FCT-002", bib_res["activeFacts"])
+        self.assertIn("SRC-001", bib_res["activeSources"])
+        self.assertNotIn("SRC-002", bib_res["activeSources"])
+        self.assertIn("SRC-001", bib_res["markdown"])
+        self.assertNotIn("SRC-002", bib_res["markdown"])
+
+    def test_multilingual_editorial_directives_and_graphics_checks(self):
+        # Configure multilingual targets
+        multi_config = """\
+schema_version: "1.0"
+project:
+  title: "The Crossing"
+author:
+  name: "Justin Novosad"
+languages:
+  primary: "en-US"
+  targets:
+    - "en-US"
+    - "fr-FR"
+back_matter:
+  include_glossary: true
+  include_bibliography: true
+"""
+        self.write("story/config.yaml", multi_config)
+        # Update style.md with fr-FR section
+        self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n" + "rule " * 500)
+
+        # 1. Editorial directives tagged with locales
+        edt_fr = """\
+# EDT-001: French dialogue register
+- **Target:** [[SCN-001]]
+- **Stage:** manuscript
+- **Locale:** fr-FR
+- **Status:** open
+
+## Directive
+Use formal vouvoiement between Elena and the harbor master.
+"""
+        edt_all = """\
+# EDT-002: Pacing cut
+- **Target:** [[SCN-001]]
+- **Stage:** manuscript
+- **Locale:** all
+- **Status:** open
+
+## Directive
+Trim opening paragraph by three sentences.
+"""
+        edt_invalid = """\
+# EDT-003: Invalid locale
+- **Target:** [[SCN-001]]
+- **Stage:** manuscript
+- **Locale:** de-DE
+- **Status:** open
+
+## Directive
+Some directive.
+"""
+        self.write("story/editorial/EDT-001.md", edt_fr)
+        self.write("story/editorial/EDT-002.md", edt_all)
+        self.write("story/editorial/EDT-003.md", edt_invalid)
+
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("has invalid 'Locale:' 'de-DE'" in e for e in res["errors"]))
+
+        # Remove invalid EDT
+        (self.root / "story/editorial/EDT-003.md").unlink()
+
+        # Feedback filter by locale
+        code, fb_fr = self.json_cli("feedback", "--locale", "fr-FR")
+        self.assertEqual(code, 0)
+        fb_ids_fr = {f["id"] for f in fb_fr}
+        self.assertIn("EDT-001", fb_ids_fr)
+        self.assertIn("EDT-002", fb_ids_fr)
+
+        code, fb_en = self.json_cli("feedback", "--locale", "en-US")
+        self.assertEqual(code, 0)
+        fb_ids_en = {f["id"] for f in fb_en}
+        self.assertNotIn("EDT-001", fb_ids_en)
+        self.assertIn("EDT-002", fb_ids_en)
+
+        # 2. Localized graphics reference verification
+        gfx_spec = """\
+# GFX-001: Harbor Map
+- **Type:** map
+- **Target:** graphics/GFX-001.png
+- **Has-Text:** true
+"""
+        self.write("kb/graphics/GFX-001-map.md", gfx_spec)
+        self.write("graphics/GFX-001.en-US.png", "dummy-en")
+        self.write("graphics/GFX-001.fr-FR.png", "dummy-fr")
+
+        # French manuscript file incorrectly referencing en-US asset
+        fr_chapter_mismatched = """\
+# CHP-001: La Lettre
+
+## SCN-001: Elena reçoit la lettre
+![Carte du Port](../../graphics/GFX-001.en-US.png)
+Elena ouvre la lettre.
+"""
+        self.write("manuscript/fr-FR/CHP-001.md", fr_chapter_mismatched)
+
+        code, check_res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("references mismatched graphic" in e and "expected localized version 'graphics/GFX-001.fr-FR.png'" in e for e in check_res["errors"]))
+
+        # Fix French manuscript file to reference localized version
+        fr_chapter_fixed = fr_chapter_mismatched.replace("GFX-001.en-US.png", "GFX-001.fr-FR.png")
+        self.write("manuscript/fr-FR/CHP-001.md", fr_chapter_fixed)
+
+        # Also add en-US manuscript referencing en-US
+        en_chapter = """\
+# CHP-001: The Letter
+
+## SCN-001: Elena receives the letter
+![Harbor Map](../../graphics/GFX-001.en-US.png)
+Elena opens the letter.
+"""
+        self.write("manuscript/en-US/CHP-001.md", en_chapter)
+
+        code, check_fixed = self.json_cli("check")
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

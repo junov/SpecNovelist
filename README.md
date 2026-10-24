@@ -99,10 +99,11 @@ Every SpecNovelist project conforms to a clean, modular folder structure:
 ```text
 my-novel/
 ├── story/                      # HUMAN-OWNED INPUTS & SPECIFICATIONS
+│   ├── config.yaml             # Project configuration (author, languages, toggles, metadata)
 │   ├── synopsis.md             # The seed synopsis (human-owned; never edited without permission)
 │   ├── brief.md                # Discovery interview decisions: premise, genre, length, settings, rigor
-│   ├── style.md                # BINDING writing-style guide (voice, rhythm, POV, anti-patterns)
-│   └── editorial/              # EDT: Editorial feedback directives (target, stage, status, issue, directive)
+│   ├── style.md                # BINDING writing-style guide (voice, rhythm, POV, locale guides)
+│   └── editorial/              # EDT: Editorial feedback directives (locale-scoped or global)
 ├── kb/                         # THE KNOWLEDGE BASE (Cataloged & Cross-Referenced)
 │   ├── characters/             # CHR: Characters (fictional & real; voice, arc, continuity)
 │   ├── places/                 # PLC: Settings & locations (layouts, sensory palettes)
@@ -112,20 +113,27 @@ my-novel/
 │   ├── themes/                 # THM: Core thematic questions and motifs
 │   ├── world/                  # WLD: World rules for futuristic/invented elements (with factual basis)
 │   ├── timeline/               # TML: Chronological master timeline of events
+│   ├── graphics/               # GFX: Graphical asset specifications (maps, diagrams, portraits)
+│   ├── glossary/               # GLS: Glossary term entries and definitions
 │   ├── facts/                  # FCT: Researched, sourced facts (history, science, procedures)
 │   ├── sources/                # SRC: Bibliographic records (primary & secondary sources, URLs, dates)
 │   ├── research/               # RQ:  Research question backlog
 │   └── INDEX.md                # GENERATED master index of all IDs (specnovel.py index)
+├── graphics/                   # RENDERED GRAPHICAL ASSETS (GFX-xxx.png, GFX-xxx.<locale>.png)
 ├── outline/                    # INTERMEDIATE ARTIFACT 1: NOVEL SKELETON
 │   └── outline.md              # Reading order: PRT (Parts) > CHP (Chapters) > SCN (Scenes)
 ├── abridged/                   # INTERMEDIATE ARTIFACT 2: ABRIDGED DRAFT (DERIVED)
 │   ├── CHP-001.md              # Condensed chapter: all plot elements & key dialogue, lean description
 │   └── CHP-002.md
-├── manuscript/                 # FINAL NOVEL PROSE (DERIVED)
-│   ├── CHP-001.md              # Finished literary novel chapters rendered via story/style.md
-│   └── CHP-002.md
+├── manuscript/                 # FINAL NOVEL PROSE (DERIVED, PER-LOCALE SUBDIRECTORIES)
+│   ├── en-US/                  # Primary language manuscript chapters
+│   │   ├── CHP-001.md
+│   │   └── CHP-002.md
+│   └── fr-FR/                  # Localized target language manuscript chapters
+│       ├── CHP-001.md
+│       └── CHP-002.md
 ├── build/                      # COMPILED BOOK DELIVERABLES (Git-ignored)
-│   ├── manuscript.md           # Assembled novel in reading order
+│   ├── manuscript.md           # Assembled novel in reading order (with foreword, glossary, biblio)
 │   └── manuscript.epub / .docx # Formatted books (via pandoc)
 ├── AGENTS.md                   # Always-on guidelines for AI agents
 └── README.md                   # Project documentation
@@ -408,6 +416,7 @@ When an author or editor provides direct feedback on intermediate artifacts (`ou
      - **Target:** [[SCN-014]]
      - **Stage:** manuscript
      - **Status:** open
+     - **Locale:** all
 
      ## Issue
      Elena appears too frail and hysterical; she is a clinical physician.
@@ -417,10 +426,64 @@ When an author or editor provides direct feedback on intermediate artifacts (`ou
      - Focus interiority on diagnostic observation (engine RPM drop, steam gauge vibration).
      - Keep dialogue lines, but alter delivery to quiet, clipped precision.
      ```
+   - Directives can target `all` locales (global prose/dramatic adjustments) or a specific target language (e.g. `fr-FR` for phrasing, register, or regional idioms).
 3. **Automated Impact & Regression Prevention**:
    - `specnovel.py impact` automatically flags any scene targeted by an `open` editorial directive, cueing `novel-sync` to re-render it.
-   - When `novel-write` or `novel-abridge` renders a scene, it queries active directives (`specnovel.py feedback SCN-xxx`) and strictly incorporates them.
+   - When `novel-write` or `novel-abridge` renders a scene, it queries active directives (`specnovel.py feedback SCN-xxx --locale <locale>`) and strictly incorporates them.
    - Once approved, the directive's status is set to `applied`, preserving a permanent record that ensures the feedback is never forgotten during future re-renders.
+
+---
+
+## Project Configuration & Multilingual Publishing
+
+### Strict Project Configuration (`story/config.yaml`)
+Every novel defines publishing metadata, contributor attributions, target languages, and compilation toggles in `story/config.yaml`:
+
+```yaml
+schema_version: 1
+
+project:
+  title: "The Ice and the Iron"
+  working_title: "Project Boreas"
+  genre: "Historical Fiction / Mystery"
+
+author:
+  name: "Elena Rostova"
+  email: "elena@example.com"
+
+languages:
+  primary: "en-US"
+  targets:
+    - "en-US"
+    - "fr-FR"
+
+compilation:
+  include_foreword: true
+  foreword_file: "story/foreword.md"
+  include_glossary: true
+  include_bibliography: true
+```
+
+The schema is strictly validated by `specnovel.py check`:
+- `languages.primary` must be present in `languages.targets`.
+- If `include_foreword` is `true`, `foreword_file` must resolve to an existing Markdown file.
+- Unknown top-level keys or improperly typed blocks are rejected immediately.
+
+### Multilingual Manuscript Organization
+Manuscripts targeting multiple languages are kept in dedicated subdirectories:
+- `manuscript/<locale>/CHP-NNN.md` (e.g. `manuscript/en-US/CHP-001.md`, `manuscript/fr-FR/CHP-001.md`).
+- For legacy single-language projects, flat `manuscript/CHP-NNN.md` files remain supported and map to the primary locale.
+- `story/style.md` contains locale-specific guidance under `# Locale: <locale>` sections (e.g. French dialogue dash conventions, honorific registers).
+
+### Localized Graphics & Text Assets
+Graphics rendered from `kb/graphics/` (`GFX-NNN`) follow an automated localization convention:
+- Assets containing text labels have localized versions tagged with language suffixes: `graphics/GFX-001.fr-FR.png`.
+- Visual assets without text fall back to the base asset `graphics/GFX-001.png`.
+- `specnovel.py check` enforces that manuscript files link to the correct localized version or fallback, catching missing or mislinked graphic references.
+
+### DAG-Filtered Bibliography & Style-Guided Glossary
+- **Bibliography (`specnovel.py bibliography`)**: Auto-generates a clean bibliographic appendix in Markdown or JSON citing sources (`SRC`) for facts (`FCT`) attached to the story DAG. Detached or pruned facts are automatically excluded.
+- **Glossary (`GLS`)**: Technical, historical, or invented terms cataloged in `kb/glossary/` follow the guidelines set in `story/style.md` (`## Glossary Guidelines`) and are automatically injected into compiled books when `include_glossary: true`.
 
 ---
 
@@ -453,6 +516,8 @@ IDs are permanent and never reused:
 | **`PLT`** | Plot Element (Thread, Arc, Secret) | `kb/plot/` | `PLT-001: Search for Karl (Main Plot)` |
 | **`THM`** | Theme / Motif | `kb/themes/` | `THM-001: Duty versus self-determination` |
 | **`WLD`** | World Rule (Futuristic / Invented) | `kb/world/` | `WLD-003: Orbital tethers carry freight, not people` |
+| **`GFX`** | Graphic Asset Specification | `kb/graphics/` | `GFX-001: Harbor approach chart` |
+| **`GLS`** | Glossary Term | `kb/glossary/` | `GLS-001: Marconi wireless rig` |
 | **`TML`** | Timeline Event | `kb/timeline/` | `TML-004: 1912-04-14 23:40 Titanic strikes iceberg` |
 | **`FCT`** | Researched Fact | `kb/facts/` | `FCT-030: Collision time ship's time` |
 | **`SRC`** | Sourced Bibliographic Record | `kb/sources/` | `SRC-011: US Senate Inquiry Transcripts (1912)` |
@@ -503,11 +568,12 @@ zero external dependencies and interacts directly with Git.
 | `delta` | Displays additions, modifications, and deletions for any stage (`brief`, `research`, `bible`, `outline`, `plan`). | `python scripts/specnovel.py delta --stage brief` |
 | `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
 | `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`, `plan`, `all`). | `python scripts/specnovel.py accept --stage brief -m "msg"` |
-| `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene or status). | `python scripts/specnovel.py feedback [SCN-xxx]` |
+| `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene, status, or locale). | `python scripts/specnovel.py feedback [SCN-xxx] [--locale fr-FR]` |
 | `placeholders` | Scans specs for placeholders (`[...]`, `<...>`) and optionally auto-generates `RQ` entries. | `python scripts/specnovel.py placeholders --create-rq` |
+| `bibliography` | Auto-generates Markdown bibliography filtered strictly to sources citing facts attached to the story DAG. | `python scripts/specnovel.py bibliography [--format md\|json] [--output <path>]` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
 | `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
-| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF). | `python scripts/specnovel.py compile --format epub` |
+| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF; injects foreword, glossary, and DAG bibliography). | `python scripts/specnovel.py compile --format epub [--locale fr-FR]` |
 | `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
 
 ---

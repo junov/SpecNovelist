@@ -3,8 +3,8 @@ name: novel-author
 description: >-
   Creates, edits and reviews knowledge-base entries in a SpecNovelist novel project: characters
   (CHR), places (PLC), organizations (ORG), objects (OBJ), plot elements (PLT), themes (THM),
-  world rules (WLD), timeline events (TML), and graphics (GFX), plus edits to story/brief.md. Use when the user
-  wants to add or change a character, location, graphic asset specification, subplot, secret, invented technology, or any
+  world rules (WLD), timeline events (TML), graphics (GFX), and glossary entries (GLS), plus edits to story/brief.md. Use when the user
+  wants to add or change a character, location, graphic asset specification, glossary term, subplot, secret, invented technology, or any
   story-bible detail, or to turn a "what if" idea into catalogued changes. Allocates permanent IDs,
   maintains [[ID]] cross-references, and reports which scenes are affected. Never edits
   abridged/ or manuscript/ (hand off to novel-sync) and never creates facts without research
@@ -66,8 +66,15 @@ When the author provides direct feedback on draft scenes:
    general voice tic, setting layout, historical fact), promote it to `kb/` (or propose an update to `story/style.md`).
 2. **Local Directive**: If the note is scene-specific, local blocking, or prose-level texture that does not
    belong in global specs, record it in `story/editorial/EDT-NNN.md` (allocate with `next-id EDT`), setting
-   `Target: [[SCN-...]]`, `Stage:`, and `Status: open`. This ensures it is automatically detected by
-   `specnovel.py impact` and re-applied during rendering.
+   `Target: [[SCN-...]]`, `Stage:`, `Locale:` (`all` or specific locale like `fr-FR`), and `Status: open`.
+   This ensures it is automatically detected by `specnovel.py impact` and re-applied during rendering.
+
+### F. Glossary entries (`GLS`)
+When adding specialized terminology, slang, archaic words, or invented world terms:
+1. Review `## Glossary Guidelines` in `story/style.md` to ensure the term qualifies.
+2. Allocate ID via `python scripts/specnovel.py next-id GLS`.
+3. Create `kb/glossary/GLS-NNN.md` with term, pronunciation/etymology, brief definition, and story context.
+4. When `compilation.include_glossary` is enabled in `story/config.yaml`, terms are automatically injected into compiled books.
 
 ## Rules
 * Never edit `abridged/` or `manuscript/` here; never create `FCT`/`SRC` entries here.

@@ -6,6 +6,7 @@ Allocate ID via: python scripts/specnovel.py next-id EDT
 
 - **Target:** [[SCN-...]] <!-- or [[CHP-...]] or global -->
 - **Stage:** manuscript <!-- outline | abridged | manuscript | all -->
+- **Locale:** all <!-- all | en-US | fr-FR -->
 - **Status:** open <!-- open | applied | superseded | wontfix -->
 
 ## Issue
