@@ -53,6 +53,7 @@ Verifies:
   - **Denouement Essentiality**: Every element in the story has a directed causal path to the novel's final denouement root (no dead-ends or inessential scenes).
 - **Integrity & References**:
   - `story/config.md` conforms strictly to the schema (author identity, target languages, foreword path if enabled, compilation flags).
+  - `story/acknowledgements.md` exists, is non-empty, and discloses all contributing AI models.
   - All cataloged IDs are unique across the project (including `GLS` glossary entries).
   - No dangling wiki-links (`[[ID]]`) exist.
   - All plot elements (`PLT`) carry valid Time and Place metadata for transition clarity.
@@ -62,6 +63,12 @@ Verifies:
   - Derived chapters and scenes in `abridged/` and `manuscript/<locale>/` match the outline in order and hierarchy.
   - Localized graphics references in manuscript files match the chapter's locale (`GFX-NNN.<locale>.png`) or fallback cleanly to base assets without text.
   - No visible `[[ID]]` markup leaks into final manuscript prose.
+
+To audit contributing AI models and verify their mandatory disclosure:
+```bash
+python scripts/specnovel.py models
+```
+Verifies that all models recorded in Git history (`Novel-Model:` trailers) or configuration are acknowledged in `story/acknowledgements.md`.
 
 To inspect the traceability and usage matrix for any character, place, or fact:
 ```bash

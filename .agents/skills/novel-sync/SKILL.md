@@ -160,20 +160,24 @@ Ask the author to review and approve the text.
 Once the author approves and all integrity checks pass:
 - If this synchronization resolved open editorial directives (`EDT`), update their `Status:` to `applied`
   and record the commit baseline in `Resolution:`.
+- Ensure the active AI model is declared with `--model <model-name>` (or via `SPECNOVEL_MODEL` env var).
+  `specnovel.py accept` automatically checks that any contributing AI model is disclosed in `story/acknowledgements.md`
+  before allowing the commit.
 - Commit the baseline:
 ```bash
-python scripts/specnovel.py accept --stage manuscript -m "Sync manuscript: <summary>"
+python scripts/specnovel.py accept --stage manuscript --model gemini-2.5-pro -m "Sync manuscript: <summary>"
 ```
 Or, if synchronizing all stages simultaneously:
 ```bash
-python scripts/specnovel.py accept --stage all -m "Sync full novel: <summary>"
+python scripts/specnovel.py accept --stage all --model gemini-2.5-pro -m "Sync full novel: <summary>"
 ```
 This stages `story/`, `kb/`, `outline/`, `graphics/`, `abridged/`, `manuscript/` and records a Git commit with
-structured `Novel-Sync:` and `Novel-GFX-Sync:` trailers.
+structured `Novel-Sync:`, `Novel-GFX-Sync:`, and `Novel-Model:` trailers.
 ```git
 novel-sync(abridged, manuscript): Update collision aftermath
 
 Novel-Sync: abridged, manuscript
+Novel-Model: gemini-2.5-pro
 Novel-Modified: SCN-014, CHR-003
 Novel-Abridged-Updated: SCN-014
 Novel-Manuscript-Updated: SCN-014
@@ -186,7 +190,7 @@ When publishing drafts or deliverable books:
 python scripts/specnovel.py compile --format epub --locale en-US
 python scripts/specnovel.py bibliography --format md
 ```
-`compile` automatically incorporates the foreword (if enabled), candidate glossary entries (`GLS`), and DAG-filtered bibliographies into `build/`.
+`compile` automatically incorporates the foreword (if enabled), candidate glossary entries (`GLS`), DAG-filtered bibliographies, and `story/acknowledgements.md` **verbatim** into `build/`.
 
 ---
 
@@ -199,3 +203,4 @@ python scripts/specnovel.py bibliography --format md
 3. **No Phantom Scenes**: Only scenes defined in `outline/` may exist in `abridged/` and `manuscript/`.
 4. **Git Baseline Integrity**: Use `specnovel.py accept` to commit baselines so that future changes
    are accurately tracked and diffed.
+5. **Mandatory AI Model Attribution**: Every contributing AI model must be declared using `--model <name>` (or via environment/git config), and must be mentioned in `story/acknowledgements.md`. `specnovel.py accept` strictly blocks synchronization commits if any model is unacknowledged.

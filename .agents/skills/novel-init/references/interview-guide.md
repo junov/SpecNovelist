@@ -148,18 +148,20 @@ The resulting `story/style.md` must be a **concrete, binding style guide** (mini
 1. **Populate Specifications**:
    - Write [story/config.md](file:///c:/Users/Justin/Documents/dev/SpecNovelist/templates/project/story/config.md) with complete author metadata, languages, toggles, budget, and locale settings.
    - Write `story/brief.md` with all premise, cast, plot, and scope decisions.
+   - Write `story/acknowledgements.md` ensuring transparent disclosure of AI models assisting with the novel.
    - Draft `story/style.md` as an exhaustive, binding guide including locale sections and glossary guidelines.
    - Seed `kb/` entries (`CHR`, `PLC`, `ORG`, `OBJ`, `PLT`, `THM`, `WLD`) with permanent IDs.
    - Automatically convert any story placeholders into research questions via `specnovel.py placeholders --create-rq`.
 2. **Automated Verification Gate**:
    - Run `python scripts/specnovel.py check` to verify:
      - `story/config.md` strictly adheres to schema (zero missing required fields or unknown keys).
+     - `story/acknowledgements.md` is populated and discloses all contributing AI models.
      - `story/style.md` has >= 400 words, contains `# Locale: <locale>` sections, and contains `## Glossary Guidelines`.
      - All KB entities, sources, and plot elements satisfy spatiotemporal and referencing requirements.
    - Fix any reported errors or warnings automatically.
 3. **Author Approval & Plan Baseline**:
    - Present a structured summary of the plan, catalog counts, and research backlog.
-   - On author approval, commit the baseline: `python scripts/specnovel.py accept --stage plan -m "Initialize novel plan"`.
+   - On author approval, commit the baseline: `python scripts/specnovel.py accept --stage plan --model <active-model> -m "Initialize novel plan"`.
 
 ---
 

@@ -103,6 +103,7 @@ my-novel/
 │   ├── synopsis.md             # The seed synopsis (human-owned; never edited without permission)
 │   ├── brief.md                # Discovery interview decisions: premise, genre, length, settings, rigor
 │   ├── style.md                # BINDING writing-style guide (voice, rhythm, POV, locale guides)
+│   ├── acknowledgements.md     # MANDATORY verbatim acknowledgements & AI model disclosures
 │   └── editorial/              # EDT: Editorial feedback directives (locale-scoped or global)
 ├── kb/                         # THE KNOWLEDGE BASE (Cataloged & Cross-Referenced)
 │   ├── characters/             # CHR: Characters (fictional & real; voice, arc, continuity)
@@ -489,6 +490,12 @@ Graphics rendered from `kb/graphics/` (`GFX-NNN`) follow an automated localizati
 - **Bibliography (`specnovel.py bibliography`)**: Auto-generates a clean bibliographic appendix in Markdown or JSON citing sources (`SRC`) for facts (`FCT`) attached to the story DAG. Detached or pruned facts are automatically excluded.
 - **Glossary (`GLS`)**: Technical, historical, or invented terms cataloged in `kb/glossary/` follow the guidelines set in `story/style.md` (`## Glossary Guidelines`) and are automatically injected into compiled books when `include_glossary: true`.
 
+### AI Model Tracking & Mandatory Acknowledgements
+SpecNovelist enforces transparent AI attribution and model provenance across all derived drafts:
+- **Mandatory `story/acknowledgements.md`**: An acknowledgements file is mandatory for every project. During compilation (`specnovel.py compile`), its contents are injected **verbatim** into the deliverable book.
+- **Git Commit Model Provenance (`Novel-Model:`)**: Whenever agents perform a synchronization step via `specnovel.py accept`, the contributing model is recorded via `--model <model>` (or via `SPECNOVEL_MODEL` or `specnovelist.model`), generating a permanent `Novel-Model: <name>` Git commit trailer.
+- **Automated Attribution Checks**: `specnovel.py check` and `specnovel.py models` inspect all contributing models across Git history and fail with a blocking error if any model is missing from `story/acknowledgements.md`. Acceptance of new sync baselines is blocked until the acknowledgements file is updated.
+
 ---
 
 ## Continuity, Fact Verification & Drift Detection (`novel-verify`)
@@ -571,13 +578,14 @@ zero external dependencies and interacts directly with Git.
 | `trace` | Displays where an ID is defined, referenced, and used across all scenes in reading order. | `python scripts/specnovel.py trace CHR-001` |
 | `delta` | Displays additions, modifications, and deletions for any stage (`brief`, `research`, `bible`, `outline`, `plan`). | `python scripts/specnovel.py delta --stage brief` |
 | `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
-| `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`, `plan`, `all`). | `python scripts/specnovel.py accept --stage brief -m "msg"` |
+| `accept` | Stages files, validates integrity, verifies model disclosure, and commits with `Novel-Sync:` and `Novel-Model:` git trailers (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`, `plan`, `all`). | `python scripts/specnovel.py accept --stage brief --model gemini-2.5-pro -m "msg"` |
 | `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene, status, or locale). | `python scripts/specnovel.py feedback [SCN-xxx] [--locale fr-FR]` |
 | `placeholders` | Scans specs for placeholders (`[...]`, `<...>`) and optionally auto-generates `RQ` entries. | `python scripts/specnovel.py placeholders --create-rq` |
-| `bibliography` | Auto-generates Markdown bibliography filtered strictly to sources citing facts attached to the story DAG. | `python scripts/specnovel.py bibliography [--format md\|json] [--output <path>]` |
+| `bibliography` | Auto-generates Markdown bibliography filtered strictly to sources citing facts attached to the story DAG. | `python scripts/specnovel.py bibliography [--format md|json] [--output <path>]` |
+| `models` | Audits contributing AI models recorded in Git trailers against mandatory disclosure in `story/acknowledgements.md`. | `python scripts/specnovel.py models [--json]` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
 | `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
-| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF; injects foreword, glossary, and DAG bibliography). | `python scripts/specnovel.py compile --format epub [--locale fr-FR]` |
+| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF; injects foreword, glossary, DAG bibliography, and verbatim acknowledgements). | `python scripts/specnovel.py compile --format epub [--locale fr-FR]` |
 | `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
 
 ---

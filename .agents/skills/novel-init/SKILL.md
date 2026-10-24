@@ -92,12 +92,15 @@ Follow [interview-guide.md](references/interview-guide.md). Rules:
   `RQ` items instead. Deep research is `novel-research`'s job.
 - Stop interviewing when the brief and config have no blocking gaps; leave the rest in `## Open questions`.
 
-### 4. Write `story/config.md` and `story/brief.md`
+### 4. Write `story/config.md`, `story/brief.md`, and `story/acknowledgements.md`
 - **`story/config.md`**: Populate the complete Markdown project configuration specification: Author Identity,
   primary and target languages, front matter paths, back matter compilation toggles, budget targets, and locale
   typographical settings. Ensure zero missing required fields and strict schema compliance.
 - **`story/brief.md`**: Fill every section of the template from the interview. Link to KB items with `[[ID]]` once they
   exist (step 5). Record undecided items under `## Open questions`; never resolve them silently.
+- **`story/acknowledgements.md`**: Initialize the mandatory acknowledgements file. Ensure it includes transparent
+  disclosure of all AI models assisting with the novel (seeded with the active assistant model, e.g. Gemini 2.5 Pro
+  or Claude 3.7 Sonnet). Automated checks (`specnovel.py check`) enforce this disclosure.
 
 ### 5. Seed the knowledge base
 Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
@@ -134,13 +137,14 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
 ### 7. Automated Validation & Approval Gate
 1. Run `python scripts/specnovel.py check` to verify:
    - `story/config.md` strictly validates against schema.
+   - `story/acknowledgements.md` exists, is non-empty, and acknowledges all contributing AI models.
    - `story/style.md` has >= 400 words, contains all `# Locale: <locale>` sections, and contains `## Glossary Guidelines`.
    - All seeded KB items have valid spatiotemporal metadata (`PLT`), valid types, and no dangling references.
 2. Run `python scripts/specnovel.py index`.
 3. Present a concise summary: brief highlights, config settings, catalog counts per type, research backlog (high
    priority first), open questions, and style anchors.
-4. On approval: `python scripts/specnovel.py accept --stage plan -m "Initialize novel plan"` (establishes initial
-   baselines for `brief`, `research`, `bible`, and `outline`).
+4. On approval: `python scripts/specnovel.py accept --stage plan --model <active-model> -m "Initialize novel plan"` (establishes initial
+   baselines for `brief`, `research`, `bible`, and `outline`, recording the `Novel-Model:` git trailer).
 5. Recommend the next step: `novel-research` for high-priority `RQ` items, then `novel-outline`.
 
 > [!NOTE]

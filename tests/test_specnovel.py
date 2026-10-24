@@ -108,7 +108,7 @@ class ProjectTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- tests
     def test_init_scaffolds_templates(self):
-        for rel in ("story/brief.md", "story/config.md", "outline/outline.md", "kb/facts/.gitkeep", "manuscript/.gitkeep"):
+        for rel in ("story/brief.md", "story/config.md", "story/acknowledgements.md", "outline/outline.md", "kb/facts/.gitkeep", "manuscript/.gitkeep"):
             self.assertTrue((self.root / rel).exists(), rel)
         self.assertIn("build/", (self.root / ".gitignore").read_text())
 
@@ -809,6 +809,55 @@ Elena opens the letter.
 
         code, check_fixed = self.json_cli("check")
         self.assertEqual(code, 0)
+
+    def test_ai_model_tracking_and_acknowledgements(self):
+        # 1. Missing acknowledgements file
+        (self.root / "story/acknowledgements.md").unlink()
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("missing mandatory acknowledgements file" in e for e in res["errors"]))
+
+        # 2. Empty acknowledgements file
+        self.write("story/acknowledgements.md", "   \n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("mandatory acknowledgements file" in e and "empty" in e for e in res["errors"]))
+
+        # 3. Model used in accept --model when not acknowledged
+        self.write("story/acknowledgements.md", "# Acknowledgements\n\nThanks to friends and family.\n")
+        code, _ = self.run_cli("accept", "--stage", "brief", "--model", "gemini-2.5-pro", "-m", "Brief update")
+        self.assertNotEqual(code, 0)
+
+        # 4. Acknowledging the model allows accept to succeed
+        self.write("story/acknowledgements.md", "# Acknowledgements\n\nAssisted by Google Gemini 2.5 Pro.\n")
+        code, _ = self.run_cli("accept", "--stage", "brief", "--model", "gemini-2.5-pro", "-m", "Brief update")
+        self.assertEqual(code, 0)
+
+        # Verify Novel-Model trailer in git log
+        log_out = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=self.root, capture_output=True, text=True, check=True).stdout
+        self.assertIn("Novel-Model: gemini-2.5-pro", log_out)
+
+        # 5. CLI models command checks status
+        code, models_res = self.json_cli("models")
+        self.assertEqual(code, 0)
+        self.assertTrue(models_res["all_acknowledged"])
+        self.assertTrue(any(m["model"] == "gemini-2.5-pro" and m["acknowledged"] for m in models_res["models"]))
+
+        # 6. Introducing a new model without updating acknowledgements causes check to fail
+        code, _ = self.run_cli("accept", "--stage", "brief", "--model", "claude-3-7-sonnet", "-m", "Claude step")
+        self.assertNotEqual(code, 0)
+
+        # Acknowledge Claude and accept succeeds
+        self.write("story/acknowledgements.md", "# Acknowledgements\n\nAssisted by Gemini 2.5 Pro and Claude 3.7 Sonnet.\n")
+        code, _ = self.run_cli("accept", "--stage", "brief", "--model", "claude-3-7-sonnet", "-m", "Claude step")
+        self.assertEqual(code, 0)
+
+        # 7. Compile includes acknowledgements verbatim
+        code, _ = self.run_cli("compile")
+        self.assertEqual(code, 0)
+        compiled_book = (self.root / "build/manuscript.md").read_text(encoding="utf-8")
+        self.assertIn("# Acknowledgements", compiled_book)
+        self.assertIn("Assisted by Gemini 2.5 Pro and Claude 3.7 Sonnet.", compiled_book)
 
 
 if __name__ == "__main__":

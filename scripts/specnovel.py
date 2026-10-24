@@ -93,6 +93,7 @@ ALL_DIRS = (STORY, KB, OUTLINE, GRAPHICS, ABRIDGED, MANUSCRIPT)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 SYNOPSIS_FILE, BRIEF_FILE, STYLE_FILE = "story/synopsis.md", "story/brief.md", "story/style.md"
 CONFIG_FILE = "story/config.md"
+ACKNOWLEDGEMENTS_FILE = "story/acknowledgements.md"
 MIN_STYLE_WORDS = 400
 
 SPEC_STAGES = ("brief", "research", "bible", "outline")
@@ -100,7 +101,7 @@ ASSET_STAGES = ("graphics",)
 DERIVED_STAGES = ("abridged", "manuscript")
 STAGES = SPEC_STAGES + ASSET_STAGES + DERIVED_STAGES
 STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
-    "brief": (SYNOPSIS_FILE, BRIEF_FILE, CONFIG_FILE),
+    "brief": (SYNOPSIS_FILE, BRIEF_FILE, CONFIG_FILE, ACKNOWLEDGEMENTS_FILE),
     "research": ("kb/research", "kb/sources", "kb/facts"),
     "bible": ("kb/characters", "kb/places", "kb/organizations", "kb/objects",
               "kb/plot", "kb/themes", "kb/world", "kb/timeline", "kb/glossary"),
@@ -629,7 +630,7 @@ CONFIG_ALLOWED_FRONT_KEYS = {
 }
 CONFIG_ALLOWED_BACK_KEYS = {
     "include_glossary", "include_bibliography", "historical_note", "historical_note_file",
-    "afterword", "acknowledgments"
+    "afterword", "acknowledgments", "acknowledgements", "acknowledgments_file", "acknowledgements_file"
 }
 CONFIG_ALLOWED_COMPILATION_KEYS = {
     "include_glossary", "include_bibliography", "foreword", "foreword_file",
@@ -777,8 +778,9 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
             historical_note_path = str(hn_val)
         if bm.get("afterword"):
             afterword_path = str(bm["afterword"])
-        if bm.get("acknowledgments"):
-            acknowledgments_path = str(bm["acknowledgments"])
+        ack_val = bm.get("acknowledgements") or bm.get("acknowledgments") or bm.get("acknowledgements_file") or bm.get("acknowledgments_file")
+        if ack_val:
+            acknowledgments_path = str(ack_val)
         for k in bm:
             if k not in CONFIG_ALLOWED_BACK_KEYS:
                 errors.append(f"unknown key in 'back_matter': '{k}'")
@@ -1239,6 +1241,87 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
     return list(items_by_key.values())
 
 
+# ------------------------------------------------------------------ ai models & acknowledgements
+def normalize_model_text(text: str) -> str:
+    """Normalize model names and text for robust substring matching."""
+    return re.sub(r"[-_.:/]", " ", text).lower()
+
+
+def model_mentioned_in_text(model: str, raw_text: str, norm_text: Optional[str] = None) -> bool:
+    """Verify whether a model is mentioned in the acknowledgements text."""
+    if not model or not raw_text:
+        return False
+    m_lower = model.strip().lower()
+    if m_lower in raw_text.lower():
+        return True
+    if norm_text is None:
+        norm_text = normalize_model_text(raw_text)
+    norm_m = normalize_model_text(model)
+    if norm_m in norm_text:
+        return True
+    if "/" in model:
+        sub = model.split("/")[-1]
+        if sub.lower() in raw_text.lower() or normalize_model_text(sub) in norm_text:
+            return True
+    return False
+
+
+def get_contributing_ai_models(git: Git, p: Optional["Project"] = None) -> Set[str]:
+    """Extract all AI models that have contributed to the novel across git history and specifications."""
+    models: Set[str] = set()
+    if git.has_commits():
+        try:
+            lines = git.lines("log", "--format=%(trailers:key=Novel-Model,valueonly=true)", "HEAD")
+            for line in lines:
+                for part in line.split(","):
+                    val = part.strip()
+                    if val:
+                        models.add(val)
+        except Exception:
+            pass
+        try:
+            lines = git.lines("log", "--format=%(trailers:key=AI-Model,valueonly=true)", "HEAD")
+            for line in lines:
+                for part in line.split(","):
+                    val = part.strip()
+                    if val:
+                        models.add(val)
+        except Exception:
+            pass
+    env_m = os.environ.get("SPECNOVEL_MODEL")
+    if env_m:
+        for part in env_m.split(","):
+            val = part.strip()
+            if val:
+                models.add(val)
+    try:
+        cfg_m = git.run("config", "--get", "specnovelist.model", check=False).stdout.strip()
+        if cfg_m:
+            for part in cfg_m.split(","):
+                val = part.strip()
+                if val:
+                    models.add(val)
+    except Exception:
+        pass
+    if p and p.config:
+        for c in p.config.contributors:
+            if isinstance(c, dict):
+                c_type = (c.get("type") or "").lower()
+                c_role = (c.get("role") or "").lower()
+                if "ai" in c_type or "model" in c_type or "ai" in c_role or "model" in c_role:
+                    if c.get("name"):
+                        models.add(str(c["name"]).strip())
+        if "ai_models" in p.config.raw:
+            aim = p.config.raw["ai_models"]
+            if isinstance(aim, list):
+                for m in aim:
+                    if m: models.add(str(m).strip())
+            elif isinstance(aim, dict):
+                for m in aim:
+                    if m: models.add(str(m).strip())
+    return models
+
+
 # ------------------------------------------------------------------ checks
 def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List[str], List[str]]:
     errors: List[str] = []
@@ -1256,6 +1339,33 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
         warnings.append(f"config back_matter.historical_note references missing file: '{p.config.historical_note_path}'")
     if not (root / SYNOPSIS_FILE).is_file():
         errors.append(f"missing seed synopsis: {SYNOPSIS_FILE}")
+
+    # mandatory acknowledgements & contributing AI models verification
+    ack_path = p.config.acknowledgments_path or ACKNOWLEDGEMENTS_FILE
+    ack_file = root / ack_path
+    if not ack_file.is_file():
+        fallback = root / "story/acknowledgments.md" if "acknowledgements" in ack_path else root / "story/acknowledgements.md"
+        if fallback.is_file():
+            ack_file = fallback
+            ack_path = fallback.relative_to(root).as_posix()
+    if not ack_file.is_file():
+        errors.append(f"missing mandatory acknowledgements file: '{ack_path}'")
+    else:
+        ack_text = ack_file.read_text(encoding="utf-8", errors="replace")
+        if not ack_text.strip():
+            errors.append(f"mandatory acknowledgements file '{ack_path}' is empty")
+        else:
+            contributing_models = get_contributing_ai_models(p.git, p)
+            for req in require:
+                if req.startswith("model:"):
+                    contributing_models.add(req.split(":", 1)[1].strip())
+            norm_ack = normalize_model_text(ack_text)
+            for m in sorted(contributing_models):
+                if not model_mentioned_in_text(m, ack_text, norm_ack):
+                    errors.append(
+                        f"mandatory acknowledgements file '{ack_path}' does not mention contributing AI model '{m}'"
+                    )
+
     style = root / STYLE_FILE
     if not style.is_file():
         errors.append(f"missing writing-style guide: {STYLE_FILE} (required input for the manuscript stage)")
@@ -2156,12 +2266,29 @@ def cmd_accept(git: Git, args) -> int:
             else:
                 stages.append(s)
 
+    model_name = getattr(args, "model", None) or os.environ.get("SPECNOVEL_MODEL")
+    if not model_name:
+        try:
+            cfg_m = git.run("config", "--get", "specnovelist.model", check=False).stdout.strip()
+            if cfg_m:
+                model_name = cfg_m
+        except Exception:
+            pass
+
+    reqs = list(stages)
+    if model_name:
+        for m in model_name.split(","):
+            if m.strip():
+                reqs.append(f"model:{m.strip()}")
+
     p = load_project(git)
-    errors, _, _ = run_checks(p)
+    errors, _, _ = run_checks(p, require=reqs)
     if errors and not args.force:
         raise NovelError("Refusing to accept - check failed (use --force to override):\n  - " + "\n  - ".join(errors))
 
     trailers = [f"{TRAILER}: {', '.join(stages)}"]
+    if model_name:
+        trailers.append(f"Novel-Model: {model_name.strip()}")
 
     dirs_to_stage = set()
     for st in stages:
@@ -2429,6 +2556,18 @@ def cmd_compile(git: Git, args) -> int:
         bib_md, _, _ = generate_bibliography_markdown(p)
         out += [bib_md, ""]
 
+    # Mandatory Acknowledgements (stored verbatim from acknowledgements.md)
+    ack_path = p.config.acknowledgments_path or ACKNOWLEDGEMENTS_FILE
+    ack_file = git.root / ack_path
+    if not ack_file.is_file():
+        fallback = git.root / "story/acknowledgments.md" if "acknowledgements" in ack_path else git.root / "story/acknowledgements.md"
+        if fallback.is_file():
+            ack_file = fallback
+    if ack_file.is_file():
+        ack_text = ack_file.read_text(encoding="utf-8", errors="replace").strip()
+        if ack_text:
+            out += [ack_text, ""]
+
     dst_dir = git.root / BUILD
     dst_dir.mkdir(exist_ok=True)
     suffix = f".{target_locale}" if args.layer == "manuscript" and len(p.config.target_languages) > 1 else ""
@@ -2452,11 +2591,48 @@ def cmd_log(git: Git, args) -> int:
     if not git.has_commits():
         print("No commits yet.")
         return 0
-    keys = ",".join(f"key={k}" for k in (TRAILER, "Novel-GFX-Sync", "Novel-Added", "Novel-Modified", "Novel-Removed",
+    keys = ",".join(f"key={k}" for k in (TRAILER, "Novel-Model", "Novel-GFX-Sync", "Novel-Added", "Novel-Modified", "Novel-Removed",
                                          "Novel-Abridged-Updated", "Novel-Abridged-Removed",
                                          "Novel-Manuscript-Updated", "Novel-Manuscript-Removed"))
     out = git.lines("log", "--extended-regexp", f"--grep=^{TRAILER}:", f"--format=%h %cs %s%n%(trailers:{keys})", "HEAD")
     print("\n".join(out) if out else "No sync commits yet.")
+    return 0
+
+
+def cmd_models(git: Git, args) -> int:
+    p = load_project(git)
+    models = get_contributing_ai_models(git, p)
+    ack_path = p.config.acknowledgments_path or ACKNOWLEDGEMENTS_FILE
+    ack_file = git.root / ack_path
+    if not ack_file.is_file():
+        fallback = git.root / "story/acknowledgments.md" if "acknowledgements" in ack_path else git.root / "story/acknowledgements.md"
+        if fallback.is_file():
+            ack_file = fallback
+            ack_path = fallback.relative_to(git.root).as_posix()
+    ack_text = ack_file.read_text(encoding="utf-8", errors="replace") if ack_file.is_file() else ""
+    norm_ack = normalize_model_text(ack_text)
+
+    records = []
+    for m in sorted(models):
+        acknowledged = model_mentioned_in_text(m, ack_text, norm_ack)
+        records.append({"model": m, "acknowledged": acknowledged})
+
+    if getattr(args, "json", False):
+        emit_json({"models": records, "acknowledgements_file": ack_path, "all_acknowledged": all(r["acknowledged"] for r in records) if records else True})
+        return 0
+
+    if not records:
+        print(f"No contributing AI models tracked yet in git history or configuration.")
+        print(f"Acknowledgements file: {ack_path}")
+        return 0
+
+    print(f"Tracked Contributing AI Models ({len(records)} total):")
+    for r in records:
+        status = "ACKNOWLEDGED" if r["acknowledged"] else "MISSING FROM ACKNOWLEDGEMENTS"
+        print(f"  - {r['model']}: [{status}]")
+    if not all(r["acknowledged"] for r in records):
+        print(f"\nWarning: Some AI models are missing from '{ack_path}'. Run 'specnovel.py check' for details.")
+        return 1
     return 0
 
 
@@ -2663,13 +2839,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("feedback", "list and inspect editorial directives (story/editorial/EDT-xxx)"),
              ("placeholders", "scan and convert placeholders into research questions (RQ)"),
              ("bibliography", "auto-generate bibliography from facts attached to the Story DAG"),
+             ("models", "list AI models contributing to the project and check acknowledgements"),
              ("index", "regenerate kb/INDEX.md (catalog of all IDs)"),
              ("stats", "word counts per chapter/scene vs targets"),
              ("compile", "assemble the novel in reading order into build/"),
              ("log", "list sync commits")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders", "bibliography"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders", "bibliography", "models"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
         if name == "bibliography":
             p.add_argument("--format", choices=["md", "json"], default="md")
@@ -2702,6 +2879,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if name == "accept":
             p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["plan", "all"])
             p.add_argument("--asset", action="append", help="specific asset ID(s) to accept (e.g. GFX-001)")
+            p.add_argument("--model", help="AI model name contributing to this sync step (e.g. 'gemini-2.5-pro', 'gpt-4o')")
             p.add_argument("-m", "--message", default="", help="short summary for the commit subject")
             p.add_argument("--force", action="store_true", help="accept even if 'check' reports errors")
         if name == "stats":
@@ -2723,7 +2901,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
                 "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
                 "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback,
-                "placeholders": cmd_placeholders, "bibliography": cmd_bibliography}
+                "placeholders": cmd_placeholders, "bibliography": cmd_bibliography, "models": cmd_models}
     try:
         if args.command == "init":
             return cmd_init(root, args)

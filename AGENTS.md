@@ -17,6 +17,8 @@ by AI writing agents.
   - `brief.md`: Interview decisions: premise, genre, audience, length, POV, setting eras, research rigor.
   - `style.md`: **Binding writing-style guide** for the manuscript. Dictates voice, rhythm, POV, diction,
     dialogue conventions, interiority, glossary guidelines, and locale-specific sections (`# Locale: <locale>`).
+  - `acknowledgements.md`: **Mandatory Verbatim Acknowledgements.** Preserves credits, tool attributions, and
+    mandatory disclosures for all AI models utilized by contributing agents, injected verbatim into compiled books.
   - `editorial/`: **The Editorial Feedback Database (`EDT-NNN.md`).** Records situational, scene-specific, or
     prose-level feedback that does not promote to top-level style/KB, tagged by target locale (`Locale: all` vs `Locale: fr-FR`).
 - **`kb/`**: **The Knowledge Base (Story Bible & Fact Repository).**
@@ -123,6 +125,15 @@ by AI writing agents.
       via `python scripts/specnovel.py bibliography`. Sources citing detached or pruned facts are excluded.
     - Glossary terms (`GLS`) are authored according to `## Glossary Guidelines` in `story/style.md`, refined
       via editorial directives, and automatically injected into compiled books when enabled in `story/config.md`.
+13. **Mandatory AI Model Tracking & Verbatim Acknowledgements**:
+    - An acknowledgements section is mandatory for every project and must be stored verbatim in `story/acknowledgements.md`.
+    - Every AI model utilized by agents contributing to a work must be tracked via `Novel-Model:` Git commit trailers
+      (recorded via `python scripts/specnovel.py accept --model <model>` or configured in `SPECNOVEL_MODEL` / `config.md`).
+    - Automated checks (`python scripts/specnovel.py check` and `python scripts/specnovel.py models`) strictly verify that
+      every contributing AI model is acknowledged in `story/acknowledgements.md`. Sync steps introducing unacknowledged models
+      will fail validation until the acknowledgements file is updated.
+    - During compilation (`python scripts/specnovel.py compile`), the text of `story/acknowledgements.md` is injected
+      verbatim into the compiled deliverable book.
 
 ---
 

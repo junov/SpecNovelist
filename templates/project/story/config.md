@@ -29,7 +29,7 @@
 - **Include Bibliography:** true
 - **Historical Note:** 
 - **Afterword:** 
-- **Acknowledgments:** 
+- **Acknowledgements:** story/acknowledgements.md 
 
 ## Contributors
 
