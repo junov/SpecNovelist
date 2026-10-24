@@ -3,11 +3,11 @@ name: novel-init
 description: >-
   Bootstraps a novel project into the SpecNovelist spec-driven writing process. Use when the user
   wants to start a new novel, has a synopsis to seed, or wants to adopt SpecNovelist for an
-  existing draft. Scaffolds the project, reads the seed synopsis, runs an interactive agent-led
-  interview (premise, setting/era, cast, plot shape, research rigor, voice), writes story/brief.md,
-  helps complete story/style.md, seeds the knowledge base with cataloged IDs (characters, places,
-  organizations, plot elements, themes, world rules) and a research-question backlog, and records
-  the initial plan baseline.
+  existing draft. Scaffolds the project, calibrates to the author's experience level (novice,
+  intermediate, experienced), conducts an interactive discovery interview with craft scaffolding,
+  generates fully valid story/config.md and story/brief.md, crafts an authoritative story/style.md,
+  seeds the knowledge base with cataloged IDs and an automated research-question backlog, and
+  records the initial plan baseline.
 ---
 
 # Novel-Init
@@ -45,28 +45,34 @@ sequenceDiagram
     participant KB as "kb/"
     Author->>Agent: Synopsis (in story/synopsis.md or pasted in chat)
     Agent->>Story: Save synopsis verbatim (if pasted)
-    Agent->>Author: Reflect understanding + gaps
-    loop Interview rounds (3-5 questions each, with recommended defaults)
-        Agent->>Author: Questions
+    Agent->>Author: Reflect understanding + Ask experience level (Novice/Intermediate/Experienced)
+    Author->>Agent: Experience level & calibration response
+    loop Interview rounds (3-5 questions each, personalized with craft scaffolding & defaults)
+        Agent->>Author: Questions (definitions, examples, external links as needed)
         Author->>Agent: Answers
     end
-    Agent->>Story: Draft brief.md and style.md
-    Agent->>KB: Seed CHR/PLC/ORG/OBJ/PLT/THM/WLD entries + RQ backlog
+    Agent->>Story: Generate complete, fully validated config.md, brief.md and style.md
+    Agent->>KB: Seed CHR/PLC/ORG/OBJ/PLT/THM/WLD entries + auto-converted RQ backlog
+    Agent->>Agent: Run specnovel.py check & dag
     Agent->>Author: Present plan for approval
     Author->>Agent: Approve / adjust
-    Agent->>Agent: specnovel.py check, index, accept --stage plan
+    Agent->>Agent: specnovel.py accept --stage plan
 ```
 
 ### 1. Capture the seed
 - If `story/synopsis.md` is still the template and the user pasted a synopsis in chat, save it
   **verbatim** into `story/synopsis.md` (set the `title:` front matter). Never embellish it.
-- The synopsis is human-owned. From now on, decisions go into `story/brief.md`, not the synopsis.
+- The synopsis is human-owned. From now on, decisions go into `story/brief.md` and `story/config.md`, not the synopsis.
 
-### 2. Reflect
-Summarize back in 5-10 bullets: premise, protagonist(s), setting(s) and era(s), central conflict,
-apparent ending, and the **setting type** of each setting (historical / contemporary / futuristic).
-List what is missing or ambiguous. Propose a provisional list of characters, places, plot threads
-and research topics the synopsis implies.
+### 2. Reflect & Calibrate Experience
+- **Reflect understanding**: Summarize back in 5-10 bullets: premise, protagonist(s), setting(s) and era(s), central conflict,
+  apparent ending, and the **setting type** of each setting (historical / contemporary / futuristic).
+- **Calibrate author experience**: **Never assume the user is an expert novelist.** Ask the author upfront whether
+  they consider themselves a **novice**, **intermediate**, or **experienced** novelist (or to describe their writing background).
+- **Personalize the interview**:
+  - *For Novices*: Provide gentle scaffolding, plain-English explanations, define domain terms in-flight (*psychic distance*, *head-hopping*, *free indirect discourse*, *inciting incident*, *dialogue tags vs action beats*), provide illustrative examples, and include external reference links (e.g. Wikipedia or standard craft guides) for questions requiring technical craft knowledge.
+  - *For Intermediates*: Use standard craft terms with brief reminders and comparative genre touchstones.
+  - *For Experienced*: Use concise technical dialogue, focusing on stylistic subtleties, anti-patterns, and publishing metadata.
 
 ### 3. Interview
 Follow [interview-guide.md](references/interview-guide.md). Rules:
@@ -74,13 +80,18 @@ Follow [interview-guide.md](references/interview-guide.md). Rules:
 - **Always offer a recommended default** grounded in the synopsis and the genre, so the author can
   answer "go with your suggestions". Use the structured question tool (multiple choice + free
   text) when available.
+- **Gather Project Configuration Data**: Collect Author Identity (name, email, legal name), target languages
+  (primary and translations), front/back matter toggles (foreword, glossary, bibliography), and word budget.
 - **Never research during the interview** beyond quick sanity checks; collect research needs as
   `RQ` items instead. Deep research is `novel-research`'s job.
-- Stop interviewing when the brief has no blocking gaps; leave the rest in `## Open questions`.
+- Stop interviewing when the brief and config have no blocking gaps; leave the rest in `## Open questions`.
 
-### 4. Write `story/brief.md`
-Fill every section of the template from the interview. Link to KB items with `[[ID]]` once they
-exist (step 5). Record undecided items under `## Open questions`; never resolve them silently.
+### 4. Write `story/config.md` and `story/brief.md`
+- **`story/config.md`**: Populate the complete Markdown project configuration specification: Author Identity,
+  primary and target languages, front matter paths, back matter compilation toggles, budget targets, and locale
+  typographical settings. Ensure zero missing required fields and strict schema compliance.
+- **`story/brief.md`**: Fill every section of the template from the interview. Link to KB items with `[[ID]]` once they
+  exist (step 5). Record undecided items under `## Open questions`; never resolve them silently.
 
 ### 5. Seed the knowledge base
 Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
@@ -102,21 +113,29 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
 - Do **not** create `FCT` entries from memory. Facts are only created by `novel-research`, with
   sources.
 
-### 6. Style guide
-`story/style.md` is a required, binding input. If it is still the template:
-- Ask whether the author wants to write it, have you draft it from the interview's voice answers,
-  or derive it from sample passages they admire (analyze POV, tense, sentence rhythm, diction,
-  dialogue conventions, figurative language, and record them as concrete rules with examples).
-- A draft from you must be **approved by the author**. It may be completed later, but
-  `novel-write` refuses to run while `check` warns that it is too thin.
+### 6. Style guide contract (`story/style.md`)
+`story/style.md` is a required, binding input that must not remain a generic template:
+- Craft an exhaustive, binding style guide of at least 400 words (typically 1,000–2,000 words) tailored to the genre,
+  POV, tone, and author preferences established in the interview.
+- Include mandatory sections:
+  - Narrative stance, psychic distance, tense, and head-hopping bans.
+  - Sentence rhythm, diction register, dialogue tag rules, and sensory priorities (the Friction Principle).
+  - `# Locale: <locale>` section for each configured target language in `story/config.md` (defining punctuation, dialogue dashes/guillemets, and regional idioms).
+  - `## Glossary Guidelines` (establishing criteria for terms cataloged under `kb/glossary/`).
+  - Banned anti-patterns and clichés.
+  - 2–3 exemplar voice anchors.
 
-### 7. Approval gate and baseline
-1. Run `specnovel.py check` and fix all errors; run `specnovel.py index`.
-2. Present a concise summary: brief highlights, catalog counts per type, research backlog (high
-   priority first), open questions, and any style-guide gaps.
-3. On approval: `specnovel.py accept --stage plan -m "Initialize novel plan"` (establishes initial
+### 7. Automated Validation & Approval Gate
+1. Run `python scripts/specnovel.py check` to verify:
+   - `story/config.md` strictly validates against schema.
+   - `story/style.md` has >= 400 words, contains all `# Locale: <locale>` sections, and contains `## Glossary Guidelines`.
+   - All seeded KB items have valid spatiotemporal metadata (`PLT`), valid types, and no dangling references.
+2. Run `python scripts/specnovel.py index`.
+3. Present a concise summary: brief highlights, config settings, catalog counts per type, research backlog (high
+   priority first), open questions, and style anchors.
+4. On approval: `python scripts/specnovel.py accept --stage plan -m "Initialize novel plan"` (establishes initial
    baselines for `brief`, `research`, `bible`, and `outline`).
-4. Recommend the next step: `novel-research` for high-priority `RQ` items, then `novel-outline`.
+5. Recommend the next step: `novel-research` for high-priority `RQ` items, then `novel-outline`.
 
 > [!NOTE]
 > **Decoupled Brief Updates**: `novel-init` is exclusively used for Day 1 onboarding. When the author

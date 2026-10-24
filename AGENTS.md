@@ -130,7 +130,7 @@ by AI writing agents.
 
 | Skill | Primary Role | When to Activate |
 |---|---|---|
-| **`novel-init`** | Project Bootstrapper & Discovery Interview | When starting a new novel from a synopsis, conducting the guided discovery interview, scaffolding the project, or drafting the initial brief, style guide, and KB baseline. |
+| **`novel-init`** | Project Bootstrapper & Discovery Interview | When starting a new novel from a synopsis, conducting the guided discovery interview (calibrated to novice/intermediate/experienced writers), scaffolding the project, or generating the validated config, brief, style guide, and KB baseline. |
 | **`novel-author`** | Story Bible & KB Authoring | When creating, editing, or reviewing characters (`CHR`), places (`PLC`), plot elements (`PLT`), themes (`THM`), world rules (`WLD`), timeline events (`TML`), graphics (`GFX`), or brief details. Never touches prose drafts. |
 | **`novel-research`** | Sourced Online Fact Gathering | When researching historical, scientific, or current-events topics, answering research questions (`RQ`), finding primary sources, or verifying factual accuracy. Never creates facts without sources. |
 | **`novel-outline`** | Structural Skeleton Builder | When creating, restructuring, or revising the novel's skeleton in reading order (parts, chapters, scenes), auditing pacing, or checking plot thread coverage. Never writes prose. |

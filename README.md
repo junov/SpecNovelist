@@ -195,19 +195,22 @@ from a single paragraph to several pages).
 > **Starting from a rough, unresearched idea with placeholders?** Read the step-by-step guide: [**Starting from Scratch: From a Rough Idea to a Spec-Driven Novel**](STARTING_FROM_SCRATCH.md) to learn how to use functional placeholders (`[...]`), Stable Identity Decoupling, and research backlogs before committing to character names, historical details, or period physics.
 
 When the author prompts `novel-init`, the agent executes an **interactive, agent-led discovery interview**:
-1. **Reflection**: The agent reflects its understanding of the premise, protagonist, setting eras, and central conflict.
-2. **Batched Questions**: The agent leads a 6-phase interview (3–5 questions per turn), **always providing recommended defaults**:
-   - **Phase 1: Premise & Scope**: Logline, genre, target word count (e.g. 90,000 words), working title.
-   - **Phase 2: Setting & Research Scope**: Historical eras, contemporary "as of" dates, futuristic extrapolations,
-     and strictness of research rigor.
-   - **Phase 3: Cast**: Protagonists, antagonists, supporting cast, POV distribution, and naming conventions.
-   - **Phase 4: Plot Architecture**: Structural model (three-act, four-act, seven-point, mystery), major turning
-     points, subplots, and ending resolution.
+1. **Reflection & Experience Calibration**:
+   - The agent reflects its understanding of the premise, protagonist, setting eras, and central conflict.
+   - **Never Assuming Expert Status**: The agent inquires whether the author is a **novice**, **intermediate**, or **experienced** novelist (or invites them to describe their writing background).
+   - **Personalized Craft Scaffolding**: For novices, the agent provides gentle scaffolding, defines technical craft concepts (*psychic distance*, *head-hopping*, *free indirect discourse*, *inciting incidents*, *dialogue tags vs action beats*), offers illustrative before/after examples, and embeds helpful external reference hyperlinks to craft resources. For seasoned authors, it moves quickly with concise technical dialogue.
+2. **Batched Discovery Rounds**: The agent leads a 7-phase interview (3–5 questions per turn), **always providing recommended defaults**:
+   - **Phase 0: Author Profile & Language Scope**: Author identity, pen name, primary language (`en-US`), and translation targets (`story/config.md`).
+   - **Phase 1: Premise & Scope**: Logline, genre, target word count (e.g. 90,000 words), chapter count, budget tolerance, working title.
+   - **Phase 2: Setting, Research Scope & Back Matter**: Historical eras, contemporary "as of" dates, futuristic extrapolations, research rigor, and front/back matter toggles (foreword, glossary, bibliography).
+   - **Phase 3: Cast**: Protagonists (goals, internal needs, flaws), antagonists, supporting cast, POV distribution, and naming conventions.
+   - **Phase 4: Plot Architecture**: Structural model (three-act, four-act, seven-point, mystery), major turning points, subplots, and ending resolution.
    - **Phase 5: Theme & Tone**: Thematic questions, recurring motifs, tone shifts, and content boundaries.
-   - **Phase 6: Voice & Style**: POV stance, tense, sentence rhythm, dialogue conventions, and touchstone authors.
-3. **Synthesis**: The agent populates `story/brief.md`, drafts `story/style.md`, seeds the knowledge base
-   (`CHR`, `PLC`, `ORG`, `OBJ`, `PLT`, `THM`, `WLD`), logs open research questions (`RQ`), and establishes the
-   initial plan baseline (`specnovel.py accept --stage plan`).
+   - **Phase 6: Voice & Style**: POV stance, tense, sentence rhythm, dialogue conventions, anti-patterns, locale typographical rules, and glossary criteria (`story/style.md`).
+3. **Synthesis & Automated Validation**:
+   - The agent generates a complete, strictly compliant `story/config.md` and `story/brief.md`.
+   - The agent writes an authoritative, comprehensive `story/style.md` (>= 400 words, including `# Locale: <locale>` sections and `## Glossary Guidelines`).
+   - The agent seeds the knowledge base (`CHR`, `PLC`, `ORG`, `OBJ`, `PLT`, `THM`, `WLD`), auto-converts placeholders to research questions (`specnovel.py placeholders --create-rq`), runs `specnovel.py check` to verify zero errors, and commits the initial plan baseline (`specnovel.py accept --stage plan`).
 
 ---
 
