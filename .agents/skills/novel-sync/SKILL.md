@@ -96,10 +96,12 @@ For each scene flagged under `impact --stage manuscript`:
 ### 6. Automated Validation and Integrity Check
 Run:
 ```bash
+python scripts/specnovel.py dag
 python scripts/specnovel.py check
 python scripts/specnovel.py stats
 ```
 Verify that:
+- Story Causality DAG is acyclic, reading order coherence is preserved (all prerequisites precede their dependents), and every element has a path to the root denouement.
 - Every scene in the outline exists in both `abridged/` and `manuscript/` in the correct reading order.
 - No dangling references or orphan scenes exist.
 - No raw `[[ID]]` tags appear in the visible manuscript prose.

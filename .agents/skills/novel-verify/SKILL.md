@@ -40,18 +40,24 @@ flowchart TD
 
 ---
 
-## 1. Structural and Traceability Audit
+## 1. Structural, Traceability, and Causality Audit
 Run the automated integrity suite:
 ```bash
 python scripts/specnovel.py check
+python scripts/specnovel.py dag
 ```
 Verifies:
-- All cataloged IDs are unique across the project.
-- No dangling wiki-links (`[[ID]]`) exist.
-- All researched facts (`FCT`) cite valid source records (`SRC`).
-- Every source has an accessible URL or full bibliographic citation.
-- Derived chapters and scenes in `abridged/` and `manuscript/` match the outline in order and hierarchy.
-- No visible `[[ID]]` markup leaks into final manuscript prose.
+- **Story Causality & Reading Order Coherence**:
+  - **Acyclicity**: Causality graph is a strict DAG with zero cycles.
+  - **Reading Order**: Every element in the outline is preceded by all its prerequisites.
+  - **Denouement Essentiality**: Every element in the story has a directed causal path to the novel's final denouement root (no dead-ends or inessential scenes).
+- **Integrity & References**:
+  - All cataloged IDs are unique across the project.
+  - No dangling wiki-links (`[[ID]]`) exist.
+  - All researched facts (`FCT`) cite valid source records (`SRC`).
+  - Every source has an accessible URL or full bibliographic citation.
+  - Derived chapters and scenes in `abridged/` and `manuscript/` match the outline in order and hierarchy.
+  - No visible `[[ID]]` markup leaks into final manuscript prose.
 
 To inspect the traceability and usage matrix for any character, place, or fact:
 ```bash

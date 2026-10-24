@@ -47,6 +47,7 @@ POV: [[CHR-001]]
 - **Target words:** 2000
 
 #### SCN-002: Karl refuses
+- **Prerequisites:** [[SCN-001]]
 - **Cast:** [[CHR-002]]
 - **Facts:** [[FCT-001]]
 - **Target words:** 1500
@@ -54,6 +55,7 @@ POV: [[CHR-001]]
 ### CHP-002: The Ship
 
 #### SCN-003: Boarding
+- **Prerequisites:** [[SCN-002]]
 - **Where:** [[PLC-001]]
 """
 ABRIDGED_1 = """\
@@ -187,13 +189,99 @@ class ProjectTest(unittest.TestCase):
         self.write("abridged/CHP-001.md", ABRIDGED_1)
         self.write("abridged/CHP-002.md", "# CHP-002: The Ship\n\n## SCN-003: Boarding\nThey board.\n")
         self.run_cli("accept", "--stage", "plan", "--stage", "abridged")
-        # move SCN-002 from CHP-001 to the end of CHP-002
-        block = "#### SCN-002: Karl refuses\n- **Cast:** [[CHR-002]]\n- **Facts:** [[FCT-001]]\n- **Target words:** 1500\n"
-        moved = OUTLINE.replace(block, "") + "\n" + block
+        # move SCN-002 from CHP-001 into CHP-002 before SCN-003
+        block = "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]]\n- **Cast:** [[CHR-002]]\n- **Facts:** [[FCT-001]]\n- **Target words:** 1500\n"
+        moved = OUTLINE.replace(block, "").replace("### CHP-002: The Ship\n", "### CHP-002: The Ship\n\n" + block)
         self.write("outline/outline.md", moved)
         _, imp = self.json_cli("impact", "--stage", "abridged")
         reasons = {s["id"]: s["reasons"] for s in imp["scenes"]}
         self.assertIn("moved from CHP-001 to CHP-002", reasons["SCN-002"])
+
+    def test_dag_valid(self):
+        code, out = self.run_cli("dag")
+        self.assertEqual(code, 0)
+        self.assertIn("[OK] Acyclic Check", out)
+        self.assertIn("[OK] Reading Order Coherence", out)
+        self.assertIn("[OK] Essentiality Check", out)
+        self.assertIn("SCN-003", out)
+
+        # test json output
+        code, res = self.json_cli("dag")
+        self.assertEqual(code, 0)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["root"], "SCN-003")
+        self.assertEqual(res["cycles"], [])
+        self.assertEqual(res["readingOrderErrors"], [])
+        self.assertEqual(res["essentialityErrors"], [])
+
+        # test mermaid output
+        code, out = self.run_cli("dag", "--mermaid")
+        self.assertEqual(code, 0)
+        self.assertIn("graph TD", out)
+        self.assertIn("SCN-001 --> SCN-002", out)
+        self.assertIn("SCN-002 --> SCN-003", out)
+
+    def test_dag_cycle_detection(self):
+        # Create a cycle: SCN-001 requires SCN-003
+        cycled_outline = OUTLINE.replace(
+            "#### SCN-001: Elena receives the letter\n",
+            "#### SCN-001: Elena receives the letter\n- **Prerequisites:** [[SCN-003]]\n"
+        )
+        self.write("outline/outline.md", cycled_outline)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("cycle detected in story causality graph" in e for e in res["errors"]))
+        code, res = self.json_cli("dag")
+        self.assertEqual(code, 1)
+        self.assertFalse(res["ok"])
+        self.assertTrue(len(res["cycles"]) > 0)
+
+    def test_dag_reading_order_violation(self):
+        # Make SCN-001 require SCN-002 (which appears later in the outline)
+        bad_outline = OUTLINE.replace(
+            "#### SCN-001: Elena receives the letter\n",
+            "#### SCN-001: Elena receives the letter\n- **Prerequisites:** [[SCN-002]]\n"
+        ).replace(
+            "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]]\n",
+            "#### SCN-002: Karl refuses\n"
+        )
+        self.write("outline/outline.md", bad_outline)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("reading order violation" in e for e in res["errors"]))
+
+    def test_dag_inessential_element(self):
+        # Add SCN-004 that does not lead to SCN-003 (denouement)
+        dead_end_outline = OUTLINE + """\
+#### SCN-004: Detour
+- **Prerequisites:** [[SCN-001]]
+- **Where:** [[PLC-001]]
+"""
+        # Explicitly mark SCN-003 as the root denouement
+        dead_end_outline = dead_end_outline.replace(
+            "#### SCN-003: Boarding\n",
+            "#### SCN-003: Boarding\n- **Denouement:** true\n"
+        )
+        self.write("outline/outline.md", dead_end_outline)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("inessential element: SCN-004 has no causal path to the root denouement (SCN-003)" in e for e in res["errors"]))
+
+    def test_dag_with_plot_element_prerequisites(self):
+        # Add a plot element with prerequisites that is advanced in scenes
+        self.write("kb/plot/PLT-001-escape.md", "# PLT-001: The Escape\n- **Prerequisites:** [[FCT-001]]\n")
+        plot_outline = OUTLINE.replace(
+            "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]]\n",
+            "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]], [[PLT-001]]\n- **Plot:** [[PLT-001]]\n"
+        )
+        self.write("outline/outline.md", plot_outline)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertEqual(res["errors"], [])
+        code, dag_res = self.json_cli("dag")
+        self.assertEqual(code, 0)
+        self.assertIn("PLT-001", dag_res["nodes"])
+        self.assertIn("FCT-001", dag_res["nodes"])
 
     def test_stats_and_compile(self):
         self.write("manuscript/CHP-001.md", ABRIDGED_1.replace("## SCN-002", "<!-- note [[CHR-002]] -->\n## SCN-002"))

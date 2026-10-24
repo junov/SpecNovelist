@@ -26,6 +26,7 @@ Usage:
     python specnovel.py init
     python specnovel.py status [--json]
     python specnovel.py check [--require abridged|manuscript] [--json]
+    python specnovel.py dag [--mermaid] [--json]
     python specnovel.py next-id CHR
     python specnovel.py trace CHR-001 [--json]
     python specnovel.py delta [--stage plan|abridged|manuscript] [--json]
@@ -64,7 +65,7 @@ FENCE_RE = re.compile(r"^\s*(```|~~~)")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 FRONT_RE = re.compile(r"\A---\s*\r?\n(.*?)\r?\n---\s*(\r?\n|\Z)", re.S)
 TARGET_RE = re.compile(r"target(?:[ _-]?length|[ _-]?words)?\**\s*:\**\s*~?\s*([\d][\d,]*)", re.I)
-FIELD_RE = r"^\s*[-*]?\s*\**{name}\**\s*:"
+FIELD_RE = r"^\s*[-*]?\s*\**{name}\**\s*:\**"
 WORD_RE = re.compile(r"[^\W_]+(?:['\u2019\-][^\W_]+)*")
 
 TRAILER = "Novel-Sync"
@@ -198,6 +199,38 @@ class Section:
 
     def ref_ids(self) -> Set[str]:
         return {r for r, _ in self.refs}
+
+    def prereq_ids(self) -> Set[str]:
+        """Extract prerequisite IDs declared in this section."""
+        ids: Set[str] = set()
+        in_prereq_block = False
+        for line in self.lines:
+            m = re.match(r"^\s*[-*]?\s*\**prerequisites?\**\s*:\**\s*(.*)$", line, re.I)
+            if not m:
+                m = re.match(r"^\s*[-*]?\s*\**requires?\**\s*:\**\s*(.*)$", line, re.I)
+            if not m:
+                m = re.match(r"^\s*[-*]?\s*\**prereqs?\**\s*:\**\s*(.*)$", line, re.I)
+
+            if m:
+                content = m.group(1).strip()
+                if content and not content.lower().startswith("none"):
+                    for ref_match in REF_RE.finditer(content):
+                        ids.add(ref_match.group("id"))
+                in_prereq_block = True
+                continue
+
+            if in_prereq_block:
+                if re.match(r"^\s+[-*]\s+.*$", line):
+                    for ref_match in REF_RE.finditer(line):
+                        ids.add(ref_match.group("id"))
+                else:
+                    in_prereq_block = False
+        return ids
+
+    @property
+    def is_denouement(self) -> bool:
+        """Whether this section is designated as the novel's final denouement."""
+        return re.search(r"^\s*[-*]?\s*\**(?:denouement|root)\**\s*:\**\s*(?:true|yes|1)\b", self.text, re.I | re.M) is not None
 
 
 def normalize(lines: Sequence[str]) -> List[str]:
@@ -417,6 +450,185 @@ def project_title(git: Git) -> str:
     return "Untitled Novel"
 
 
+# ------------------------------------------------------------------ story causality DAG
+@dataclass
+class StoryDAG:
+    nodes: Set[str] = field(default_factory=set)
+    edges: Dict[str, Set[str]] = field(default_factory=dict)         # u -> {v}: u is prerequisite for v
+    reverse_edges: Dict[str, Set[str]] = field(default_factory=dict) # v -> {u}: v requires u
+    root: Optional[str] = None
+    positions: Dict[str, int] = field(default_factory=dict)          # ID -> 1-based scene index where it first appears
+
+
+def build_story_dag(p: Project) -> StoryDAG:
+    dag = StoryDAG()
+    plan, o = p.plan, p.outline
+    if not o.scenes:
+        return dag
+
+    # 1. Compute positions: scene index (1-based) where each ID first appears in reading order
+    for idx, sid in enumerate(o.scenes, 1):
+        dag.positions[sid] = idx
+        # Map all referenced items in the scene section and its ancestors
+        for a in ancestors(plan, sid):
+            for rid in a.ref_ids():
+                if rid not in dag.positions:
+                    dag.positions[rid] = idx
+
+    # 2. Identify designated root denouement
+    explicit_root = None
+    # Check for explicit denouement pointer (e.g. - **Denouement:** [[SCN-...]])
+    for sec in plan.sections():
+        m = re.search(r"^\s*[-*]?\s*\**(?:denouement|root)\**\s*:\**\s*(?:\[\[\s*)?(?P<id>[A-Z][A-Z0-9]*-\d{3,})", sec.text, re.I | re.M)
+        if m:
+            explicit_root = m.group("id")
+            break
+    # Check for section marked with - **Denouement:** true
+    if not explicit_root:
+        for sec in plan.sections():
+            if sec.id and sec.is_denouement and (sec.id in o.scenes or sec.prefix == "PLT"):
+                explicit_root = sec.id
+                break
+
+    dag.root = explicit_root if explicit_root and explicit_root in plan.defs else (o.scenes[-1] if o.scenes else None)
+
+    # 3. Collect all nodes that belong to the story
+    # All scenes in outline are story elements
+    for sid in o.scenes:
+        dag.nodes.add(sid)
+
+    # All plot elements appearing in the outline
+    for sec in plan.of_type("PLT"):
+        if sec.id in dag.positions:
+            dag.nodes.add(sec.id)
+
+    # Any element in the plan that explicitly declares prerequisites or is referenced as a prerequisite
+    for sec in plan.defs.values():
+        prereqs = sec.prereq_ids()
+        if prereqs:
+            dag.nodes.add(sec.id)
+            for req in prereqs:
+                dag.nodes.add(req)
+
+    # 4. Build edges: u -> v means u is prerequisite for v
+    for node in list(dag.nodes):
+        sec = plan.defs.get(node)
+        if not sec:
+            continue
+        for req in sec.prereq_ids():
+            dag.nodes.add(req)
+            dag.edges.setdefault(req, set()).add(node)
+            dag.reverse_edges.setdefault(node, set()).add(req)
+
+    return dag
+
+
+def check_dag_cycles(dag: StoryDAG) -> List[str]:
+    """Detect directed cycles in the story causality graph."""
+    state: Dict[str, int] = {}  # 0=unvisited, 1=visiting, 2=visited
+    cycles: List[str] = []
+
+    def dfs(node: str, path: List[str]):
+        state[node] = 1
+        path.append(node)
+        for neighbor in sorted(dag.edges.get(node, set())):
+            if state.get(neighbor, 0) == 1:
+                idx = path.index(neighbor)
+                cycle = path[idx:] + [neighbor]
+                cycles.append(" -> ".join(cycle))
+            elif state.get(neighbor, 0) == 0:
+                dfs(neighbor, path)
+        path.pop()
+        state[node] = 2
+
+    for n in sorted(dag.nodes):
+        if state.get(n, 0) == 0:
+            dfs(n, [])
+    return cycles
+
+
+def check_reading_order_coherence(dag: StoryDAG, outline: Outline) -> List[str]:
+    """Verify that every element in the outline is preceded by all its prerequisites."""
+    errors: List[str] = []
+    for node in sorted(dag.nodes):
+        prereqs = dag.reverse_edges.get(node, set())
+        node_pos = dag.positions.get(node, float('inf'))
+        for p in sorted(prereqs):
+            p_pos = dag.positions.get(p, float('inf'))
+            if p_pos == float('inf'):
+                errors.append(f"reading order violation: prerequisite {p} of {node} never appears in the outline")
+            elif node_pos == float('inf'):
+                errors.append(f"reading order violation: story element {node} (requires {p}) never appears in the outline")
+            elif node.startswith("SCN-") and p.startswith("SCN-"):
+                if p_pos >= node_pos:
+                    errors.append(
+                        f"reading order violation: scene {node} (scene #{int(node_pos)}) requires {p} (scene #{int(p_pos)}), "
+                        f"but {p} does not precede {node} in the outline"
+                    )
+            elif p_pos > node_pos:
+                errors.append(
+                    f"reading order violation: {node} (first appears in scene #{int(node_pos)}) requires {p} (first appears in scene #{int(p_pos)}), "
+                    f"but {p} appears later in reading order"
+                )
+    return errors
+
+
+def check_essentiality_to_root(dag: StoryDAG) -> Tuple[Optional[str], List[str]]:
+    """Verify that every element in the story is essential by having a directed path to the root denouement."""
+    errors: List[str] = []
+    if not dag.root:
+        return None, ["no root denouement found (outline is empty)"]
+    if dag.root not in dag.nodes:
+        return dag.root, [f"designated root denouement {dag.root} does not exist in the story DAG"]
+
+    reachable: Set[str] = set()
+    queue = [dag.root]
+    reachable.add(dag.root)
+
+    while queue:
+        curr = queue.pop(0)
+        for pred in dag.reverse_edges.get(curr, set()):
+            if pred not in reachable:
+                reachable.add(pred)
+                queue.append(pred)
+
+    inessential = sorted([n for n in dag.nodes if n not in reachable])
+    for n in inessential:
+        errors.append(f"inessential element: {n} has no causal path to the root denouement ({dag.root})")
+    return dag.root, errors
+
+
+def run_dag_checks(p: Project) -> Tuple[List[str], List[str], List[str]]:
+    """Run all DAG causality, reading order coherence, and denouement essentiality checks."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    infos: List[str] = []
+
+    if not p.outline.scenes:
+        return errors, warnings, infos
+
+    dag = build_story_dag(p)
+
+    # 1. Cycle detection (must be a DAG)
+    cycles = check_dag_cycles(dag)
+    for c in cycles:
+        errors.append(f"cycle detected in story causality graph: {c}")
+
+    # 2. Reading order coherence (all prerequisites precede dependents)
+    ro_errors = check_reading_order_coherence(dag, p.outline)
+    errors += ro_errors
+
+    # 3. Essentiality to root denouement (path to root)
+    root, ess_errors = check_essentiality_to_root(dag)
+    errors += ess_errors
+
+    if not (cycles or ro_errors or ess_errors):
+        total_edges = sum(len(v) for v in dag.edges.values())
+        infos.append(f"story DAG verified: {len(dag.nodes)} elements, {total_edges} causal edges, root denouement is {root}")
+
+    return errors, warnings, infos
+
+
 # ------------------------------------------------------------------ checks
 def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List[str], List[str]]:
     errors: List[str] = []
@@ -479,6 +691,12 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     uncited = [s.id for s in plan.of_type("SRC") if s.id not in cited]
     if uncited:
         infos.append(f"{len(uncited)} source(s) not cited by any fact: " + ", ".join(uncited))
+
+    # story causality DAG, reading order coherence and denouement essentiality
+    dag_errors, dag_warnings, dag_infos = run_dag_checks(p)
+    errors += dag_errors
+    warnings += dag_warnings
+    infos += dag_infos
 
     # derived layers
     for name, d in p.layers.items():
@@ -771,6 +989,106 @@ def cmd_check(git: Git, args) -> int:
     return 1 if errors else 0
 
 
+def cmd_dag(git: Git, args) -> int:
+    p = load_project(git)
+    if not p.outline.scenes:
+        print("No scenes in outline yet.")
+        return 0
+    dag = build_story_dag(p)
+    cycles = check_dag_cycles(dag)
+    ro_errors = check_reading_order_coherence(dag, p.outline)
+    root, ess_errors = check_essentiality_to_root(dag)
+    total_edges = sum(len(v) for v in dag.edges.values())
+
+    if args.json:
+        emit_json({
+            "root": root,
+            "nodes": sorted(dag.nodes),
+            "edges": {k: sorted(v) for k, v in dag.edges.items()},
+            "reverseEdges": {k: sorted(v) for k, v in dag.reverse_edges.items()},
+            "positions": dag.positions,
+            "cycles": cycles,
+            "readingOrderErrors": ro_errors,
+            "essentialityErrors": ess_errors,
+            "ok": not (cycles or ro_errors or ess_errors),
+        })
+        return 1 if (cycles or ro_errors or ess_errors) else 0
+
+    if args.mermaid:
+        out = ["```mermaid", "graph TD"]
+        for node in sorted(dag.nodes):
+            sec = p.plan.defs.get(node)
+            title = sec.title if sec else node
+            safe_title = title.replace('"', "'")
+            is_root = " (Denouement)" if node == root else ""
+            out.append(f'    {node}["{node}: {safe_title}{is_root}"]')
+        for u in sorted(dag.edges):
+            for v in sorted(dag.edges[u]):
+                out.append(f"    {u} --> {v}")
+        out.append("```")
+        print("\n".join(out))
+        return 0
+
+    out = [
+        f"# Story Causality DAG & Reading Order Coherence: {project_title(git)}", "",
+        f"Root Denouement: {root} ({p.plan.defs[root].title if root in p.plan.defs else 'unknown'})",
+        f"Story Elements in DAG: {len(dag.nodes)}",
+        f"Causal Prerequisite Edges: {total_edges}", "",
+        "## Verification Results:"
+    ]
+
+    if cycles:
+        out.append(f"  [FAIL] Acyclic Check: {len(cycles)} causality cycle(s) detected:")
+        out += [f"    - {c}" for c in cycles]
+    else:
+        out.append("  [OK] Acyclic Check: Graph is a valid DAG (no causality loops)")
+
+    if ro_errors:
+        out.append(f"  [FAIL] Reading Order Coherence: {len(ro_errors)} violation(s):")
+        out += [f"    - {e}" for e in ro_errors]
+    else:
+        out.append("  [OK] Reading Order Coherence: All prerequisites precede dependents in the outline")
+
+    if ess_errors:
+        out.append(f"  [FAIL] Essentiality Check: {len(ess_errors)} inessential element(s):")
+        out += [f"    - {e}" for e in ess_errors]
+    else:
+        out.append(f"  [OK] Essentiality Check: All {len(dag.nodes)} elements have a path to the root denouement ({root})")
+
+    out += ["", "## Elements & Prerequisites in Reading Order:"]
+    for sid in p.outline.scenes:
+        s = p.plan.defs.get(sid)
+        title = s.title if s else sid
+        prereqs = dag.reverse_edges.get(sid, set())
+        enables = dag.edges.get(sid, set())
+        flags = " [ROOT DENOUEMENT]" if sid == root else ""
+        out.append(f"  {sid}: {title}{flags}")
+        if prereqs:
+            out.append(f"    prerequisites: {', '.join(sorted(prereqs))}")
+        if enables:
+            out.append(f"    enables:       {', '.join(sorted(enables))}")
+
+    non_scenes = sorted([n for n in dag.nodes if not n.startswith("SCN-")])
+    if non_scenes:
+        out += ["", "## Knowledge & Plot Elements in DAG:"]
+        for n in non_scenes:
+            s = p.plan.defs.get(n)
+            title = s.title if s else n
+            prereqs = dag.reverse_edges.get(n, set())
+            enables = dag.edges.get(n, set())
+            flags = " [ROOT DENOUEMENT]" if n == root else ""
+            pos = dag.positions.get(n)
+            pos_str = f"first appears in scene #{pos}" if pos else "not in outline"
+            out.append(f"  {n}: {title}{flags} ({pos_str})")
+            if prereqs:
+                out.append(f"    prerequisites: {', '.join(sorted(prereqs))}")
+            if enables:
+                out.append(f"    enables:       {', '.join(sorted(enables))}")
+
+    print("\n".join(out))
+    return 1 if (cycles or ro_errors or ess_errors) else 0
+
+
 def cmd_next_id(git: Git, args) -> int:
     prefix = args.prefix.upper()
     if not re.fullmatch(r"[A-Z][A-Z0-9]*", prefix):
@@ -1042,6 +1360,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     specs = [("init", "scaffold story/ kb/ outline/ abridged/ manuscript/ from templates"),
              ("status", "dashboard: catalog, coverage, pending work, next step"),
              ("check", "integrity checks (exit 1 on errors)"),
+             ("dag", "verify story causality DAG and reading order coherence"),
              ("next-id", "allocate the next unused ID for a prefix"),
              ("trace", "where an ID is defined, referenced and used in scenes"),
              ("delta", "ID-level changes in story/ kb/ outline/ since a stage baseline"),
@@ -1053,8 +1372,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("log", "list sync commits")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "trace", "delta", "impact", "stats"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
+        if name == "dag":
+            p.add_argument("--mermaid", action="store_true", help="output story DAG as a mermaid diagram")
         if name == "check":
             p.add_argument("--require", action="append", choices=list(LAYERS),
                            help="treat outline scenes missing from this layer as errors")
@@ -1085,8 +1406,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     root = Path(args.root).resolve()
-    handlers = {"status": cmd_status, "check": cmd_check, "next-id": cmd_next_id, "trace": cmd_trace,
-                "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
+    handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
+                "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
                 "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log}
     try:
         if args.command == "init":

@@ -225,7 +225,7 @@ For all historical, scientific, legal, geographical, and contemporary facts, the
 
 ### Stage 3: Intermediate Artifact 1 — The High-Level Outline (`novel-outline`)
 
-The outline is the **structural skeleton of the novel in reading order**.
+The outline is the **structural skeleton of the novel in reading order** and a **strict serialization of the story causality DAG**.
 
 Built in `outline/outline.md`, it organizes the book into Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`):
 ```markdown
@@ -236,6 +236,7 @@ Built in `outline/outline.md`, it organizes the book into Parts (`PRT`), Chapter
 - **Target words:** 5500
 
 #### SCN-014: The collision
+- **Prerequisites:** [[SCN-006]], [[PLT-001]]
 - **When:** 1912-04-14, 23:40 ship's time ([[TML-004]])
 - **Where:** [[PLC-007]]
 - **POV:** [[CHR-001]]
@@ -255,10 +256,36 @@ Built in `outline/outline.md`, it organizes the book into Parts (`PRT`), Chapter
 - **Change:** Elena moves from irritation to cold panic; realizes Karl fled before the impact.
 - **Target words:** 2200
 ```
-- **Reading Order**: The document heading order defines reading order. IDs never encode position, allowing
-  scenes and chapters to be reordered effortlessly.
-- **The Contract**: Every scene specifies its location, cast, plot movement, sourced facts, sequential beats,
-  mandatory dialogue, and the resulting irreversible change.
+
+#### Story Causality as a Directed Acyclic Graph (DAG)
+Narrative causality is modeled formally as a Directed Acyclic Graph:
+- **Causal Dependencies (`Prerequisites:`)**: Every scene, plot element, or story-bible fact declares which
+  other elements must occur or be established prior to it (`Prerequisites: [[ID]]`).
+- **Serialization in Reading Order**: The novel's outline is a serialization of this DAG. For any dependency
+  $u \to v$ ($v$ requires $u$), $u$ must appear before $v$ in the outline reading order ($pos(u) < pos(v)$).
+- **The Denouement Root**: The root of the DAG is the novel's final resolving scene or climax (designated
+  by `- **Denouement:** true` or specified in `story/brief.md`).
+- **Essentiality (No Dead Ends)**: Every plot element and scene must have a directed causal path to the root
+  denouement. Any extraneous subplot or dead-end scene that does not contribute causally to the novel's
+  ultimate resolution is flagged and rejected.
+
+```mermaid
+flowchart TD
+    SCN1["SCN-001: Elena receives letter"] --> SCN2["SCN-002: Karl refuses"]
+    FCT1["FCT-001: Steamer schedule"] --> SCN2
+    SCN1 --> SCN3["SCN-003: Booking passage"]
+    SCN2 --> SCN4["SCN-004: Boarding the ship"]
+    SCN3 --> SCN4
+    SCN4 --> SCN5["SCN-005: Root Denouement\n(Final confrontation)"]
+
+    style SCN5 fill:#d4edda,stroke:#28a745,stroke-width:2px
+```
+
+Whenever the outline is touched or updated, automated tests are executed via `python scripts/specnovel.py dag`
+and `specnovel.py check`:
+1. **Cycle Detection**: Validates that no circular causality exists (the graph is truly a DAG).
+2. **Reading Order Coherence**: Validates that all prerequisites precede their dependent scenes in the outline.
+3. **Essentiality to Root**: Validates that every scene and plot element has a directed path to the root denouement.
 
 ---
 
@@ -398,7 +425,8 @@ zero external dependencies and interacts directly with Git.
 |---|---|---|
 | `init` | Scaffolds the repository folders and templates. | `python scripts/specnovel.py init` |
 | `status` | Dashboard: catalog counts, scene coverage, word counts, and pending work. | `python scripts/specnovel.py status` |
-| `check` | Automated validation: fails (exit 1) on dangling links, duplicate IDs, or missing scenes. | `python scripts/specnovel.py check` |
+| `check` | Automated validation: fails (exit 1) on dangling links, duplicate IDs, missing scenes, or DAG violations. | `python scripts/specnovel.py check` |
+| `dag` | Validates narrative causality DAG: detects cycles, reading order violations, and inessential dead-ends. | `python scripts/specnovel.py dag` |
 | `next-id` | Allocates the next permanent ID for a prefix (accounting for git history). | `python scripts/specnovel.py next-id CHR` |
 | `trace` | Displays where an ID is defined, referenced, and used across all scenes in reading order. | `python scripts/specnovel.py trace CHR-001` |
 | `delta` | Displays ID-level additions, modifications, and deletions in the plan vs. baseline. | `python scripts/specnovel.py delta --stage plan` |

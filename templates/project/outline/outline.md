@@ -6,6 +6,16 @@ Reading order is the order of headings in this file (and of files in outline/, s
 if you split the outline into several files such as 01-part-one.md, 02-part-two.md).
 IDs never encode position: moving a scene is done by moving its block.
 
+Story Causality DAG & Reading Order Coherence:
+- Every scene and plot element defines which earlier elements are its prerequisites via
+  `- **Prerequisites:** [[SCN-...]], [[PLT-...]]`.
+- The outline is a serialization of this causality DAG: every element in the outline must be preceded
+  by all its prerequisites (`specnovel.py check` & `specnovel.py dag` enforce this).
+- The story DAG must be acyclic (no circular causality).
+- The root of the DAG is the novel's final denouement (marked with `- **Denouement:** true` or designated
+  in `story/brief.md`; defaults to the last scene).
+- Every scene and plot element must have a directed causal path to the root denouement (no dead-end / inessential scenes).
+
 Hierarchy (Parts are optional):
 
 ```markdown
@@ -16,6 +26,7 @@ Purpose: What this chapter does for the novel.
 POV: [[CHR-001]] | Time: [[TML-003]] | Setting: [[PLC-002]]
 
 #### SCN-001: Elena receives the letter
+- **Prerequisites:** None (or list [[SCN-...]], [[PLT-...]], [[FCT-...]])
 - **When:** 1912-04-02, morning (after [[TML-002]])
 - **Where:** [[PLC-002]]
 - **POV:** [[CHR-001]]
@@ -30,5 +41,6 @@ POV: [[CHR-001]] | Time: [[TML-003]] | Setting: [[PLC-002]]
 - **Key dialogue:** "..." (must survive into the abridged and final text)
 - **Change:** what is different at the end of the scene (value shift, knowledge gained)
 - **Target words:** 2500
+- **Denouement:** true (optional; designate the root of the story DAG; defaults to the last scene)
 ```
 -->

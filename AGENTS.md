@@ -60,9 +60,18 @@ by AI writing agents.
 6. **Git-Native Synchronization**:
    Project baselines are tracked using `Novel-Sync:` Git commit trailers. Use `specnovel.py`:
    - `python scripts/specnovel.py status`: Check catalog status, scene coverage, and un-synced drift.
-   - `python scripts/specnovel.py check`: Automated integrity checks (fails on dangling links, unsourced facts, misordered scenes).
+   - `python scripts/specnovel.py check`: Automated integrity checks (fails on dangling links, unsourced facts, misordered scenes, or DAG violations).
+   - `python scripts/specnovel.py dag`: Validates story causality DAG (acyclicity, reading order coherence, denouement essentiality).
    - `python scripts/specnovel.py impact --stage <abridged|manuscript>`: Identify scenes that need (re)generation.
    - `python scripts/specnovel.py accept --stage <stage> -m "<msg>"`: Commit synchronized changes.
+7. **Story Causality as a DAG & Reading Order Coherence**:
+   Story causality is modeled as a Directed Acyclic Graph (DAG) rooted at the novel's final denouement:
+   - Every scene and plot element identifies its prerequisites (`Prerequisites: [[ID]]`).
+   - The novel's outline is a strict serialization of this DAG: every element in the outline must be preceded
+     in reading order by all of its prerequisites.
+   - The root of the DAG is the novel's final denouement (`- **Denouement:** true` or specified in `story/brief.md`).
+   - Every element in the story must have a causal path leading to the root denouement (no dead-ends or inessential scenes).
+   - Automated DAG tests (`python scripts/specnovel.py dag`) must be executed whenever the outline is touched.
 
 ---
 

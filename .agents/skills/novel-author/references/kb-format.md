@@ -128,6 +128,7 @@ agents consult for continuity.
 ### Plot element (`PLT`)
 ```markdown
 # PLT-001: Elena's search for her brother (main plot)
+- **Prerequisites:** [[PLT-002]], [[FCT-001]] (causal requirements or conditions; checked in story DAG)
 - **Kind:** main plot | subplot | character arc | mystery | secret | romance | setup/payoff
 - **Dramatic question:** Will Elena find Karl before the ship sails?
 - **Involves:** [[CHR-001]], [[CHR-002]], [[OBJ-001]]
@@ -138,6 +139,11 @@ agents consult for continuity.
 ```
 Where each beat lands is **not** stored here: `specnovel.py trace PLT-001` lists the scenes that
 reference it in reading order. This avoids duplicated, drifting information.
+
+> [!IMPORTANT]
+> **Story Causality**: When a `PLT` element specifies `Prerequisites:`, `specnovel.py dag` ensures that
+> every scene advancing this plot element is preceded in the outline reading order by all of the plot
+> element's prerequisites, and that the plot element has a causal path to the novel's root denouement.
 
 ### Theme (`THM`)
 ```markdown

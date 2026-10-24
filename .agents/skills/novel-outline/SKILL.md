@@ -43,11 +43,19 @@ Iterate with the author until the macro structure is approved. Allocate `PRT`/`C
 
 ### 3. Pass 2: scenes
 For each chapter, write scenes per [outline-format.md](references/outline-format.md). Each scene
-states when, where, POV, cast, the plot elements it advances, the facts and world rules it relies
-on, goal/conflict/outcome, beats, must-keep dialogue (if any), the change it produces, and a
-target length. Allocate `SCN` IDs with `next-id SCN`, saving between calls.
+states prerequisites (`Prerequisites: [[...]]`), when, where, POV, cast, the plot elements it
+advances, the facts and world rules it relies on, goal/conflict/outcome, beats, must-keep dialogue
+(if any), the change it produces, target length, and (for the resolving scene) `Denouement: true`.
+Allocate `SCN` IDs with `next-id SCN`, saving between calls.
 
 While outlining:
+- **Causality & Prerequisites**: Every scene (and plot element) must identify which earlier elements
+  are its prerequisites (`Prerequisites: [[SCN-...]], [[PLT-...]]`). The outline must represent a valid
+  serialization of the story's directed acyclic graph (DAG), where every element is preceded in reading
+  order by all its prerequisites.
+- **Root Denouement & Essentiality**: The novel's final denouement is the root of the story DAG. Mark the
+  resolving scene with `- **Denouement:** true` (or specify it in `story/brief.md`). Every element in the
+  story must have a directed causal path to the root denouement; inessential dead-ends are forbidden.
 - **Missing story-bible items** (a new minor character, a room, an object): create the KB entry
   per novel-author conventions so every reference resolves.
 - **Missing facts**: never invent them. Add an `RQ` item linked to the scene (`Needed for:`), use a
@@ -56,7 +64,14 @@ While outlining:
   established facts. Add story events to the timeline when they anchor later scenes.
 
 ### 4. Audit the outline
-Run `specnovel.py check` (all references resolve; scenes are nested in chapters), then review:
+Whenever the outline is created, restructured, or updated, execute the automated DAG tests and check:
+1. `python <toolkit>/scripts/specnovel.py dag`: Verifies acyclicity (it is indeed a DAG), reading
+   order coherence (each element in the outline is preceded by all its prerequisites), and
+   essentiality (every element has a causal path to the root denouement).
+2. `python <toolkit>/scripts/specnovel.py check`: Comprehensive validation (all references resolve,
+   no dangling links, facts are sourced, scenes nested in chapters, DAG checks pass).
+
+Then review:
 - Every `PLT` element is set up, developed and paid off (`specnovel.py trace PLT-xxx` lists its
   scenes in reading order); every major character's arc has visible steps.
 - Every scene changes something; flag scenes with no change or no conflict.
@@ -67,19 +82,25 @@ Run `specnovel.py check` (all references resolve; scenes are nested in chapters)
 
 ### 5. Approval and baseline
 Present the outline summary (chapter list with one-liners, thread coverage, open `RQ`s, length
-budget). On approval: `specnovel.py index`, then
+budget, DAG verification status). On approval: `specnovel.py index`, then
 `specnovel.py accept --stage plan -m "Outline: <summary>"`. Recommend `novel-abridge` next.
 
 ## Revising an existing outline
 - **Move** a scene or chapter by moving its whole block; IDs stay the same. Never renumber.
+  *Note*: Reordering scenes must not violate reading order coherence with respect to prerequisites!
 - **Cut** a scene by deleting its block (the ID is retired); its derived text is flagged for
-  removal by `specnovel.py impact`.
+  removal by `specnovel.py impact`. Ensure downstream scenes' prerequisites are adjusted so no broken
+  dependencies or disconnected paths to root are created.
 - **Split** a scene: keep the ID for the part that retains the original purpose; allocate a new ID
   for the other.
+- **Always re-test**: Run `specnovel.py dag` and `specnovel.py check` immediately following any edit.
 - After revisions, show which derived scenes are affected: `specnovel.py impact --stage abridged`,
   and hand off to `novel-sync` once the plan is accepted.
 
 ## Rules
+- The story is a Directed Acyclic Graph (DAG) rooted at the final denouement.
+- Heading order **is** reading order; every element must be preceded by all its prerequisites.
+- Every scene and plot element must have a causal path to the root denouement (no dead-ends).
 - Never write prose in the outline; beats are terse statements of what happens.
 - Never contradict a sourced fact without the author choosing a documented `Liberty:`.
-- Heading order **is** reading order; IDs never encode position.
+- Always run `specnovel.py dag` and `specnovel.py check` whenever the outline is touched.

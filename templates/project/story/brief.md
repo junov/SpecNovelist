@@ -39,8 +39,9 @@ Use [[ID]] links to knowledge-base items once they exist.
 
 ## Central conflict and stakes
 
-## Ending
+## Ending & Denouement
 <!-- How it ends and what has changed. Ambiguity is a decision too; record it. -->
+- **Denouement:** [[SCN-...]] <!-- The resolving scene or plot climax that serves as the root of the story causality DAG -->
 
 ## Themes and motifs
 
