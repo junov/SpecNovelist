@@ -1,0 +1,434 @@
+# SpecNovelist: Specification-First Fiction Writing with AI Agents
+
+**SpecNovelist** is an AI-native writing methodology and toolkit adapted from the **SpecDrive**
+specification-driven software engineering paradigm. In SpecNovelist, **structured story specifications,
+researched knowledge bases, and outlines serve as the primary source of truth**, while the narrative
+drafts (abridged and full manuscript) are treated as derived artifacts maintained and compiled by AI agents.
+
+SpecNovelist is specifically designed for writing novels set in **rigorously researched historical,
+contemporary, and/or futuristic settings**, where continuity, factual fidelity, narrative causality,
+and distinct literary voice must be maintained across tens or hundreds of thousands of words without
+context drift or hallucination.
+
+---
+
+## Table of Contents
+
+1. [Core Philosophy & Architecture](#core-philosophy--architecture)
+2. [Project Directory Layout](#project-directory-layout)
+3. [The Five-Stage Novel Writing Pipeline](#the-five-stage-novel-writing-pipeline)
+   - [Stage 1: Seed Synopsis & Interactive Discovery Interview (`novel-init`)](#stage-1-seed-synopsis--interactive-discovery-interview-novel-init)
+   - [Stage 2: Knowledge Base Construction & Sourced Research (`novel-author` & `novel-research`)](#stage-2-knowledge-base-construction--sourced-research-novel-author--novel-research)
+   - [Stage 3: Intermediate Artifact 1 — The High-Level Outline (`novel-outline`)](#stage-3-intermediate-artifact-1--the-high-level-outline-novel-outline)
+   - [Stage 4: Intermediate Artifact 2 — The Abridged Novel (`novel-abridge`)](#stage-4-intermediate-artifact-2--the-abridged-novel-novel-abridge)
+   - [Stage 5: Prose Rendering via Style Guide (`novel-write`)](#stage-5-prose-rendering-via-style-guide-novel-write)
+4. [Incremental Synchronization & Baselines (`novel-sync`)](#incremental-synchronization--baselines-novel-sync)
+5. [Continuity, Fact Verification & Drift Detection (`novel-verify`)](#continuity-fact-verification--drift-detection-novel-verify)
+6. [Knowledge Base Catalog & ID Registry](#knowledge-base-catalog--id-registry)
+7. [The Authoritative Style Guide (`story/style.md`)](#the-authoritative-style-guide-storystylemd)
+8. [CLI Helper Reference (`specnovel.py`)](#cli-helper-reference-specnovelpy)
+9. [Adopting SpecNovelist in Host Projects](#adopting-specnovelist-in-host-projects)
+
+---
+
+## Core Philosophy & Architecture
+
+### The Problem in AI-Assisted Novel Writing
+Unstructured "vibe-writing" and simple conversational prompting invariably fail over novel-length works:
+- **Context Drift & Hallucination**: Character traits (eye color, age, wounds), timeline dates, and
+  established facts mutate across chapters as the LLM's context window shifts.
+- **Unearned Plot Leaps**: AI skips essential narrative steps, rushing from premise to resolution
+  without dramatic causality or emotional turns.
+- **Factual Inaccuracy & Anachronisms**: Historical settings suffer from modern jargon and factual
+  errors; futuristic settings suffer from magical hand-waving without grounded scientific constraints.
+- **Homogenized Voice**: Prose degenerates into generic, overly explanatory "AI prose" filled with
+  recurrent clichés (*"a testament to", "tapestry of", "let out a breath she didn't know she was holding"*).
+
+### The Solution: Spec-as-Source for Fiction
+SpecNovelist solves this by establishing **Specifications as Source (Spec-as-Source)**:
+
+```mermaid
+flowchart TD
+    subgraph Specifications ["THE SOURCE OF TRUTH (Human-Owned / Agent-Assisted)"]
+        A["story/synopsis.md\n(Seed Synopsis)"] --> B["novel-init (Interview)\nstory/brief.md"]
+        B --> C["kb/ (Knowledge Base)\nCharacters, Places, Facts, World Rules\nCataloged with Permanent IDs"]
+        B --> D["story/style.md\n(Binding Writing-Style Guide)"]
+        C --> E["outline/ (Outline Artifact)\nSkeleton in Reading Order\nCross-referenced to KB"]
+    end
+
+    subgraph Intermediate ["INTERMEDIATE ARTIFACT (Derived)"]
+        E -->|novel-abridge| F["abridged/ (Abridged Novel)\nAll Plot Elements & Key Dialogue\nLean Description (30-50% words)"]
+    end
+
+    subgraph Final ["FINAL DERIVED ARTIFACT"]
+        F --> G["novel-write\n(Prose Rendering Engine)"]
+        D --> G
+        C --> G
+        G --> H["manuscript/ (Final Novel)\nImmersive Literary Prose\nZero Visible Metadata"]
+    end
+
+    subgraph Compilation ["COMPILATION & PUBLISHING"]
+        H -->|specnovel.py compile| I["build/ (Novel Deliverables)\nMarkdown, DOCX, EPUB, PDF"]
+    end
+```
+
+- **Spec is Primary**: Plot structure, character continuity, world rules, and researched facts live in
+  version-controlled Markdown under `story/`, `kb/`, and `outline/`.
+- **Drafts are Derived**: `abridged/` and `manuscript/` are derived from the specs. When you want to
+  change what happens in the story, you edit the spec—the AI agent calculates the impact radius and
+  re-synchronizes the drafts.
+- **Two Distinct Intermediate Artifacts**:
+  1. **The High-Level Outline (`outline/`)**: The skeleton in reading order, defining scene beats,
+     turning points, fact constraints, and key dialogue.
+  2. **The Abridged Novel (`abridged/`)**: The complete narrative spine containing *all plot elements*
+     and *important dialogues*, but with minimal description. This allows rapid author review of pacing
+     and dramatic causality before investing in full prose rendering.
+- **Binding Style Contract**: The manuscript is generated by combining the abridged novel with a
+  thorough, enforceable writing style guide (`story/style.md`).
+- **Authoritative Sourcing**: Every real-world fact must cite verified, authoritative sources (prioritizing
+  primary sources) cataloged in the knowledge base.
+- **Git-Native Baselines**: Sync commits are tracked using Git commit trailers (`Novel-Sync:`).
+
+---
+
+## Project Directory Layout
+
+Every SpecNovelist project conforms to a clean, modular folder structure:
+
+```text
+my-novel/
+├── story/                      # HUMAN-OWNED INPUTS & SPECIFICATIONS
+│   ├── synopsis.md             # The seed synopsis (human-owned; never edited without permission)
+│   ├── brief.md                # Discovery interview decisions: premise, genre, length, settings, rigor
+│   └── style.md                # BINDING writing-style guide (voice, rhythm, POV, anti-patterns)
+├── kb/                         # THE KNOWLEDGE BASE (Cataloged & Cross-Referenced)
+│   ├── characters/             # CHR: Characters (fictional & real; voice, arc, continuity)
+│   ├── places/                 # PLC: Settings & locations (layouts, sensory palettes)
+│   ├── organizations/          # ORG: Institutions, factions, companies
+│   ├── objects/                # OBJ: Significant props, heirlooms, vehicles, documents
+│   ├── plot/                   # PLT: Main plot, subplots, character arcs, mysteries, secrets
+│   ├── themes/                 # THM: Core thematic questions and motifs
+│   ├── world/                  # WLD: World rules for futuristic/invented elements (with factual basis)
+│   ├── timeline/               # TML: Chronological master timeline of events
+│   ├── facts/                  # FCT: Researched, sourced facts (history, science, procedures)
+│   ├── sources/                # SRC: Bibliographic records (primary & secondary sources, URLs, dates)
+│   ├── research/               # RQ:  Research question backlog
+│   └── INDEX.md                # GENERATED master index of all IDs (specnovel.py index)
+├── outline/                    # INTERMEDIATE ARTIFACT 1: NOVEL SKELETON
+│   └── outline.md              # Reading order: PRT (Parts) > CHP (Chapters) > SCN (Scenes)
+├── abridged/                   # INTERMEDIATE ARTIFACT 2: ABRIDGED DRAFT (DERIVED)
+│   ├── CHP-001.md              # Condensed chapter: all plot elements & key dialogue, lean description
+│   └── CHP-002.md
+├── manuscript/                 # FINAL NOVEL PROSE (DERIVED)
+│   ├── CHP-001.md              # Finished literary novel chapters rendered via story/style.md
+│   └── CHP-002.md
+├── build/                      # COMPILED BOOK DELIVERABLES (Git-ignored)
+│   ├── manuscript.md           # Assembled novel in reading order
+│   └── manuscript.epub / .docx # Formatted books (via pandoc)
+├── AGENTS.md                   # Always-on guidelines for AI agents
+└── README.md                   # Project documentation
+```
+
+---
+
+## The Five-Stage Novel Writing Pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Author
+    participant Agent as AI Agent
+    participant Specs as story/ & kb/
+    participant Outline as outline/
+    participant Abridged as abridged/
+    participant Manuscript as manuscript/
+    participant Git as Git Baseline
+
+    Note over Author,Git: Stage 1: Seed & Interview
+    Author->>Specs: Writes seed in story/synopsis.md
+    Author->>Agent: Runs novel-init
+    Agent->>Author: Conducts structured discovery interview
+    Agent->>Specs: Writes story/brief.md, seeds kb/ & RQ backlog, drafts story/style.md
+    Agent->>Git: Commits initial plan baseline (Novel-Sync: plan)
+
+    Note over Author,Git: Stage 2: Research & Story Bible
+    Author->>Agent: Runs novel-research
+    Agent->>Specs: Conducts web research, records SRC & FCT, resolves RQ backlog
+    Author->>Agent: Runs novel-author to refine characters & places
+
+    Note over Author,Git: Stage 3: High-Level Outline
+    Author->>Agent: Runs novel-outline
+    Agent->>Outline: Builds skeleton in reading order (PRT > CHP > SCN) cross-referencing KB
+    Author->>Outline: Reviews & approves outline structure
+
+    Note over Author,Git: Stage 4: Intermediate Abridged Novel
+    Author->>Agent: Runs novel-abridge (or novel-sync)
+    Agent->>Abridged: Drafts condensed chapters (all plot & key dialogue, lean description)
+    Author->>Abridged: Reviews pacing & dialogue; approves abridged baseline
+
+    Note over Author,Git: Stage 5: Final Prose Rendering
+    Author->>Agent: Runs novel-write (or novel-sync)
+    Agent->>Manuscript: Renders full prose from abridged/ + story/style.md + kb/
+    Agent->>Agent: Runs specnovel.py check (audits continuity & integrity)
+    Author->>Manuscript: Reviews finished chapters; approves manuscript baseline
+    Agent->>Git: Commits novel-sync(abridged, manuscript)
+```
+
+---
+
+### Stage 1: Seed Synopsis & Interactive Discovery Interview (`novel-init`)
+
+Every novel begins with a high-level synopsis written by the author in `story/synopsis.md` (anything
+from a single paragraph to several pages).
+
+When the author prompts `novel-init`, the agent executes an **interactive, agent-led discovery interview**:
+1. **Reflection**: The agent reflects its understanding of the premise, protagonist, setting eras, and central conflict.
+2. **Batched Questions**: The agent leads a 6-phase interview (3–5 questions per turn), **always providing recommended defaults**:
+   - **Phase 1: Premise & Scope**: Logline, genre, target word count (e.g. 90,000 words), working title.
+   - **Phase 2: Setting & Research Scope**: Historical eras, contemporary "as of" dates, futuristic extrapolations,
+     and strictness of research rigor.
+   - **Phase 3: Cast**: Protagonists, antagonists, supporting cast, POV distribution, and naming conventions.
+   - **Phase 4: Plot Architecture**: Structural model (three-act, four-act, seven-point, mystery), major turning
+     points, subplots, and ending resolution.
+   - **Phase 5: Theme & Tone**: Thematic questions, recurring motifs, tone shifts, and content boundaries.
+   - **Phase 6: Voice & Style**: POV stance, tense, sentence rhythm, dialogue conventions, and touchstone authors.
+3. **Synthesis**: The agent populates `story/brief.md`, drafts `story/style.md`, seeds the knowledge base
+   (`CHR`, `PLC`, `ORG`, `OBJ`, `PLT`, `THM`, `WLD`), logs open research questions (`RQ`), and establishes the
+   initial plan baseline (`specnovel.py accept --stage plan`).
+
+---
+
+### Stage 2: Knowledge Base Construction & Sourced Research (`novel-author` & `novel-research`)
+
+#### Knowledge Base (`novel-author`)
+The story bible is cataloged into dedicated markdown files under `kb/`. Every item receives a permanent
+alphanumeric ID (`PREFIX-NNN`) and is cross-referenced using wiki-links (`[[CHR-001]]` or `[[CHR-001|Elena]]`).
+The agent assists the author in fleshing out character goals/flaws, setting layouts, and plot threads.
+
+#### Authoritative Online Research (`novel-research`)
+For all historical, scientific, legal, geographical, and contemporary facts, the agent executes online research:
+- **Authoritative Source Hierarchy**:
+  1. **Primary Sources**: Official records, government inquiry transcripts, contemporaneous newspapers, diaries,
+     letters, original patents, scientific datasets, and period maps.
+  2. **Secondary Sources**: Peer-reviewed journal articles, university press monographs, museum curatorial archives.
+  3. **Tertiary Sources**: Reference encyclopedias used for orientation only.
+  *(Open wikis and AI summaries are never cited as evidence; their citations are mined for original sources).*
+- **Verification Rule**: The agent must **read the actual page or document** before citing it. Never cite from
+  search snippets or memory.
+- **Corroboration**: Major claims require one authoritative primary source or two independent secondary sources.
+- **Recording**:
+  - The source is recorded in `kb/sources/` (`SRC-xxx`) with Title, Creator, Publisher, URL, Access Date, Full Citation, and Reliability notes.
+  - The fact is recorded in `kb/facts/` (`FCT-xxx`) with a clear statement, scope, confidence rating, supporting quotes/locators, and `Story use:` guidance.
+  - Sourced facts resolve research questions (`RQ-xxx`) in `kb/research/questions.md`.
+
+---
+
+### Stage 3: Intermediate Artifact 1 — The High-Level Outline (`novel-outline`)
+
+The outline is the **structural skeleton of the novel in reading order**.
+
+Built in `outline/outline.md`, it organizes the book into Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`):
+```markdown
+### CHP-004: Night Crossing
+- **Purpose:** Escalation toward the midpoint crisis
+- **POV:** [[CHR-001]]
+- **Span:** 1912-04-14 evening -> 1912-04-15 dawn
+- **Target words:** 5500
+
+#### SCN-014: The collision
+- **When:** 1912-04-14, 23:40 ship's time ([[TML-004]])
+- **Where:** [[PLC-007]]
+- **POV:** [[CHR-001]]
+- **Cast:** [[CHR-001]], [[CHR-003]], an unnamed steward
+- **Plot:** escalates [[PLT-001]]; pays off clue from SCN-006 ([[PLT-005]])
+- **Facts:** [[FCT-030]], [[FCT-031]]
+- **World:** (if speculative) [[WLD-002]]
+- **Goal / conflict / outcome:** Elena wants to reach Karl's cabin; barred by a steward; slips past but finds it empty.
+- **Beats:**
+  1. A faint shudder through the deck; card players ignore it.
+  2. The sudden silence as engines stop (per [[FCT-031]]).
+  3. Sharp confrontation with the steward at the E-deck gate.
+  4. Karl's cabin is deserted; his coat is missing, but the ledger remains.
+- **Key dialogue:**
+  - Steward: "Nothing to worry about, miss. Go back to bed."
+  - Elena: "Then why are your hands shaking?"
+- **Change:** Elena moves from irritation to cold panic; realizes Karl fled before the impact.
+- **Target words:** 2200
+```
+- **Reading Order**: The document heading order defines reading order. IDs never encode position, allowing
+  scenes and chapters to be reordered effortlessly.
+- **The Contract**: Every scene specifies its location, cast, plot movement, sourced facts, sequential beats,
+  mandatory dialogue, and the resulting irreversible change.
+
+---
+
+### Stage 4: Intermediate Artifact 2 — The Abridged Novel (`novel-abridge`)
+
+The **abridged novel** (`abridged/`) is the vital intermediate bridge between the outline and the final prose.
+
+- **What it is**: A complete, readable version of the novel structured into chapter files (`abridged/CHP-001.md`).
+- **All Plot Elements Present**: Every single beat from the outline occurs on the page. No plot leaps or summaries.
+- **All Important Dialogues Present**: All `Key dialogue` lines from the outline and all substantive dramatic conversations are written out in full, spoken lines with complete subtext and character voice.
+- **Lean Description**: Atmospheric flourishes, sensory descriptions, weather passages, and deep philosophical
+  interiority are kept to their functional essentials.
+- **Why it matters**:
+  - The abridged version is typically 30% to 50% of the target word count.
+  - The author can read an entire 30,000-word abridged draft of a 90,000-word novel in one afternoon, evaluating
+    pacing, plot holes, character agency, and dialogue dynamics before hundreds of hours are spent rendering prose.
+
+---
+
+### Stage 5: Prose Rendering via Style Guide (`novel-write`)
+
+Once the abridged draft is approved, `novel-write` expands each scene into the final manuscript (`manuscript/CHP-001.md`).
+
+Prose rendering is strictly guided by **three inputs**:
+1. **The Abridged Scene (`abridged/`)**: The unquestioned authority on plot events, decisions, and dialogue.
+2. **The Style Guide (`story/style.md`)**: The binding authority on prose craft (see below).
+3. **The Knowledge Base (`kb/`)**: Provides sensory palettes from `PLC`, character speech tics and interior wounds from `CHR`, authentic tactile details from `FCT`, and physical constraints from `WLD`.
+
+The generated prose is fully realized, immersive literary fiction with **zero visible metadata** (all `[[ID]]`
+tags are stripped from the prose).
+
+---
+
+## Incremental Synchronization & Baselines (`novel-sync`)
+
+In SpecNovelist, projects evolve through spec edits. When an author modifies a character's background, changes a
+historical date, or adds a scene to the outline, `novel-sync` propagates the changes downstream:
+
+```mermaid
+flowchart LR
+    A["Author edits\nstory/, kb/, outline/"] --> B["novel-sync\n(specnovel.py impact)"]
+    B -->|updates beats & dialogue| C["abridged/\n(Abridged Draft)"]
+    C -->|Author Approves| D["abridged baseline\n(Novel-Sync: abridged)"]
+    D -->|renders prose via style.md| E["manuscript/\n(Final Novel)"]
+    E -->|Author Approves| F["manuscript baseline\n(Novel-Sync: manuscript)"]
+```
+
+1. **Impact Detection**: `specnovel.py impact --stage abridged` analyzes the dependency graph between the
+   baseline commit and the working tree, identifying only the specific scenes impacted by changed IDs.
+2. **Sequential Reconciliation**:
+   - `abridged/` is updated first for impacted scenes.
+   - Author reviews and approves the abridged changes.
+   - `manuscript/` is re-rendered for impacted scenes using `story/style.md`.
+3. **Automated Verification**: `specnovel.py check` validates that all scenes exist in outline order, references
+   resolve, and no tags leak into prose.
+4. **Git Baselines**: The agent records the synchronization using Git commit trailers:
+   ```git
+   novel-sync(abridged, manuscript): Update collision aftermath
+
+   Novel-Sync: abridged, manuscript
+   Novel-Modified: SCN-014, CHR-003
+   Novel-Abridged-Updated: SCN-014
+   Novel-Manuscript-Updated: SCN-014
+   ```
+
+---
+
+## Continuity, Fact Verification & Drift Detection (`novel-verify`)
+
+The `novel-verify` skill audits project integrity across five dimensions:
+1. **Structural & Traceability**: Runs `specnovel.py check` to catch duplicate IDs, dangling links, unsourced facts, or misordered scenes.
+2. **Character Continuity**: Audits physical traits (eye color, scars, handedness), injury recovery pacing, and forms of address against `CHR`.
+3. **Chronology & Logistics**: Audits calendar consistency against `TML` and travel durations between `PLC` locations.
+4. **Epistemic Hygiene (Who knows what, when?)**: Verifies that characters never act on information or secrets they have not yet learned.
+5. **Style Compliance & Anti-Patterns**: Scans `manuscript/` against `story/style.md` for forbidden clichés, filter words (*"she heard"*, *"he saw"*), dialogue tag adverbs, and generic AI idioms.
+6. **Code Drift Triage**: Detects direct, unauthorized edits made to `manuscript/` outside a sync, categorizing defects into:
+   - *Plan Defect*: The outline or KB was flawed; fix the spec first.
+   - *Abridged Defect*: Outline was correct, but abridged missed a beat; fix `abridged/`.
+   - *Manuscript Defect*: Plot is correct, but prose slipped in style; fix `manuscript/`.
+
+---
+
+## Knowledge Base Catalog & ID Registry
+
+Every cataloged entity uses a dedicated uppercase prefix and sequential 3-digit number.
+IDs are permanent and never reused:
+
+| Prefix | Entity | Primary Folder | Example |
+|---|---|---|---|
+| **`CHR`** | Character | `kb/characters/` | `CHR-001: Elena Voss` |
+| **`PLC`** | Place / Location | `kb/places/` | `PLC-002: Hamburg-America Line pier` |
+| **`ORG`** | Organization | `kb/organizations/` | `ORG-001: Hamburg-America Line (HAPAG)` |
+| **`OBJ`** | Object / Prop | `kb/objects/` | `OBJ-001: The unsigned letter` |
+| **`PLT`** | Plot Element (Thread, Arc, Secret) | `kb/plot/` | `PLT-001: Search for Karl (Main Plot)` |
+| **`THM`** | Theme / Motif | `kb/themes/` | `THM-001: Duty versus self-determination` |
+| **`WLD`** | World Rule (Futuristic / Invented) | `kb/world/` | `WLD-003: Orbital tethers carry freight, not people` |
+| **`TML`** | Timeline Event | `kb/timeline/` | `TML-004: 1912-04-14 23:40 Titanic strikes iceberg` |
+| **`FCT`** | Researched Fact | `kb/facts/` | `FCT-030: Collision time ship's time` |
+| **`SRC`** | Sourced Bibliographic Record | `kb/sources/` | `SRC-011: US Senate Inquiry Transcripts (1912)` |
+| **`RQ`** | Research Question | `kb/research/` | `RQ-007: What was the exact collision time?` |
+| **`PRT`** | Part (Outline) | `outline/` | `PRT-001: Part One - Departure` |
+| **`CHP`** | Chapter (Outline / Drafts) | `outline/`, `abridged/`, `manuscript/` | `CHP-001: The Letter` |
+| **`SCN`** | Scene (Outline / Drafts) | `outline/`, `abridged/`, `manuscript/` | `SCN-001: Elena receives the letter` |
+
+---
+
+## The Authoritative Style Guide (`story/style.md`)
+
+The file `story/style.md` is a **mandatory, binding input**. The prose rendering engine refuses to generate
+the manuscript if this file is missing or contains fewer than 400 words of concrete guidance.
+
+It governs 15 specific aspects of prose craft:
+1. **Narrative Stance**: POV person, psychic distance, and head-hopping prohibitions.
+2. **Tense**: Past vs. present; flashback mechanics.
+3. **Narrator Reliability & Secrets**: Dramatic irony handling.
+4. **Tone & Mood**: Baseline mood and shifts across acts.
+5. **Prose Rhythm**: Sentence length variation, fragments, paragraph cadence.
+6. **Diction & Vocabulary**: Register, period vocabulary, anachronism policy, profanity rules.
+7. **Dialogue Craft**: Tag policy (*"said/asked only; no adverbs"*), interruptions, period address.
+8. **Description & Sensory Detail**: Density, favored senses, metaphor guidelines.
+9. **Interiority**: Free indirect discourse vs. direct thought.
+10. **Exposition & Research Delivery**: The Friction Principle (no lectures; facts revealed through character action).
+11. **Content Boundaries**: On-page vs. off-page violence, intimacy, and sensitivity boundaries.
+12. **Mechanics & Typography**: US vs. UK spelling, quotation marks, em-dash spacing, numbers.
+13. **Per-POV Variations**: Distinct linguistic registers for different viewpoint characters.
+14. **Anti-Patterns (Forbidden Ruts)**: Explicitly banned clichés, filter words, and generic AI idioms.
+15. **Voice Anchors**: 2–5 exemplar passages illustrating the target voice for the agent to emulate.
+
+---
+
+## CLI Helper Reference (`specnovel.py`)
+
+A portable Python (3.8+ standard library) CLI tool is provided at `scripts/specnovel.py`. It requires
+zero external dependencies and interacts directly with Git.
+
+| Command | Description | Example |
+|---|---|---|
+| `init` | Scaffolds the repository folders and templates. | `python scripts/specnovel.py init` |
+| `status` | Dashboard: catalog counts, scene coverage, word counts, and pending work. | `python scripts/specnovel.py status` |
+| `check` | Automated validation: fails (exit 1) on dangling links, duplicate IDs, or missing scenes. | `python scripts/specnovel.py check` |
+| `next-id` | Allocates the next permanent ID for a prefix (accounting for git history). | `python scripts/specnovel.py next-id CHR` |
+| `trace` | Displays where an ID is defined, referenced, and used across all scenes in reading order. | `python scripts/specnovel.py trace CHR-001` |
+| `delta` | Displays ID-level additions, modifications, and deletions in the plan vs. baseline. | `python scripts/specnovel.py delta --stage plan` |
+| `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
+| `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers. | `python scripts/specnovel.py accept --stage abridged -m "msg"` |
+| `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
+| `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
+| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF). | `python scripts/specnovel.py compile --format epub` |
+| `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
+
+---
+
+## Adopting SpecNovelist in Host Projects
+
+To use SpecNovelist in any novel project:
+
+### 1. Add as a Submodule or Toolkit
+In your host novel repository:
+```bash
+git submodule add https://github.com/junov/SpecNovelist.git third_party/specnovelist
+```
+
+### 2. Configure Agent Skills & Rules
+Run the automated bootstrapper:
+```bash
+python third_party/specnovelist/scripts/bootstrap.py
+```
+This automatically registers the skills in `.agents/skills.json` and injects the SpecNovelist guidelines
+into your project's `AGENTS.md`. Zero files are copied or symlinked!
+
+### 3. Initialize Your Novel
+Open your AI coding or writing assistant and prompt:
+> *"Run novel-init to initialize this novel project."*
