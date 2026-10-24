@@ -124,6 +124,26 @@ Present the rendered scenes to the author:
   python scripts/specnovel.py accept --stage manuscript -m "Render manuscript for chapter 1"
   ```
 
+### 7. Exploring Alternate Prose Takes (`specnovel.py takes`)
+When the author wants to audition alternative stylistic approaches (e.g. first-person intimate vs third-person objective, or high-sensory noir vs lean staccato) without destroying the existing draft:
+- Save the current active scene draft as a versioned take:
+  ```bash
+  python scripts/specnovel.py takes save SCN-014 default-third -m "Original third-person limited draft"
+  ```
+- Render alternative takes and save them:
+  ```bash
+  python scripts/specnovel.py takes save SCN-014 noir-first-person -m "Close first-person noir take"
+  ```
+- List and compare takes side-by-side:
+  ```bash
+  python scripts/specnovel.py takes list SCN-014
+  python scripts/specnovel.py takes diff SCN-014 default-third noir-first-person
+  ```
+- Activate the selected take into the compiled manuscript:
+  ```bash
+  python scripts/specnovel.py takes activate SCN-014 noir-first-person
+  ```
+
 ---
 
 ## Golden Rules of Novel-Write

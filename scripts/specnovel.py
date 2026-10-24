@@ -51,8 +51,9 @@ import sys
 import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 # ------------------------------------------------------------------ configuration
 ID_PATTERN = r"[A-Z][A-Z0-9]*-\d{3,}"
@@ -261,9 +262,10 @@ class Section:
         return re.search(FIELD_RE.format(name=name), self.text, re.I | re.M) is not None
 
     def field_value(self, *names: str) -> Optional[str]:
-        """Extract the text value of a named field (e.g. 'time', 'place')."""
+        """Extract the text value of a named field (e.g. 'time', 'place', 'pays_off')."""
         for name in names:
-            m = re.search(r"^\s*[-*]?\s*\**" + re.escape(name) + r"\**\s*:\**\s*(.*)$", self.text, re.I | re.M)
+            pattern = re.sub(r"[-_\s]+", r"[-_\\s]+", re.escape(name))
+            m = re.search(r"^\s*[-*]?\s*\**" + pattern + r"\**\s*:\**\s*(.*)$", self.text, re.I | re.M)
             if m:
                 val = COMMENT_RE.sub("", m.group(1)).strip()
                 if val:
@@ -272,7 +274,7 @@ class Section:
                 lines_after: List[str] = []
                 in_field = False
                 for line in self.lines:
-                    if re.match(r"^\s*[-*]?\s*\**" + re.escape(name) + r"\**\s*:\**", line, re.I):
+                    if re.match(r"^\s*[-*]?\s*\**" + pattern + r"\**\s*:\**", line, re.I):
                         in_field = True
                         continue
                     if in_field:
@@ -287,6 +289,15 @@ class Section:
 
     def ref_ids(self) -> Set[str]:
         return {r for r, _ in self.refs}
+
+    def ref_ids_for_field(self, *names: str) -> Set[str]:
+        """Extract all [[ID]] references declared under specific named fields."""
+        ids: Set[str] = set()
+        val = self.field_value(*names)
+        if val:
+            for ref_match in REF_RE.finditer(val):
+                ids.add(ref_match.group("id"))
+        return ids
 
     def prereq_ids(self) -> Set[str]:
         """Extract prerequisite IDs declared in this section."""
@@ -407,6 +418,8 @@ def build_model(sources: Dict[str, str]) -> Model:
     model = Model()
     for rel in sorted(sources):
         if rel in GENERATED:
+            continue
+        if rel.startswith("story/scenarios/") or rel.startswith("story/takes/") or "/takes/" in rel or ".take-" in rel:
             continue
         for s in parse_markdown(sources[rel], rel):
             if s.id:
@@ -613,7 +626,7 @@ def parse_config_markdown(text: str) -> dict:
 CONFIG_ALLOWED_TOP_KEYS = {
     "schema_version", "project", "author", "languages",
     "front_matter", "back_matter", "compilation", "contributors", "publication",
-    "budget", "locales"
+    "budget", "locales", "authoring"
 }
 
 CONFIG_ALLOWED_PROJECT_KEYS = {
@@ -641,6 +654,9 @@ CONFIG_ALLOWED_BUDGET_KEYS = {
 }
 CONFIG_ALLOWED_PUBLICATION_KEYS = {
     "publisher", "imprint", "isbn"
+}
+CONFIG_ALLOWED_AUTHORING_KEYS = {
+    "harvest_mode"
 }
 
 
@@ -671,6 +687,7 @@ class ProjectConfig:
     publication: dict = field(default_factory=dict)
     budget: dict = field(default_factory=dict)
     locales: dict = field(default_factory=dict)
+    harvest_mode: str = "batch"
     errors: List[str] = field(default_factory=list)
 
 
@@ -832,6 +849,19 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
 
     locales = raw.get("locales") or {}
 
+    authoring = raw.get("authoring") or {}
+    harvest_mode = "batch"
+    if isinstance(authoring, dict):
+        for k in authoring:
+            if k not in CONFIG_ALLOWED_AUTHORING_KEYS:
+                errors.append(f"unknown key in 'authoring': '{k}'")
+        if "harvest_mode" in authoring:
+            harvest_mode = str(authoring["harvest_mode"]).lower()
+            if harvest_mode not in ("batch", "interactive"):
+                errors.append(f"invalid 'authoring.harvest_mode': '{harvest_mode}', must be 'batch' or 'interactive'")
+    elif authoring is not None:
+        errors.append("'authoring' must be a dictionary")
+
     return ProjectConfig(
         raw=raw,
         schema_version=schema_version or "1.0",
@@ -858,6 +888,7 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
         publication=publication if isinstance(publication, dict) else {},
         budget=budget if isinstance(budget, dict) else {},
         locales=locales if isinstance(locales, dict) else {},
+        harvest_mode=harvest_mode,
         errors=errors,
     )
 
@@ -1009,6 +1040,21 @@ def build_story_dag(p: Project) -> StoryDAG:
             dag.edges.setdefault(req, set()).add(node)
             dag.reverse_edges.setdefault(node, set()).add(req)
 
+    # 5. Plant -> Payoff edges (Chekhov's gun setups form causal prerequisites for payoffs)
+    for sid in o.scenes:
+        sec = plan.defs.get(sid)
+        if not sec:
+            continue
+        pays_off = sec.ref_ids_for_field("pays_off", "pays-off", "paysoff", "payoff", "pays")
+        for poy_id in pays_off:
+            for earlier_sid in o.scenes:
+                if earlier_sid == sid:
+                    break
+                earlier_sec = plan.defs.get(earlier_sid)
+                if earlier_sec and poy_id in earlier_sec.ref_ids_for_field("plants", "plant", "setups", "setup"):
+                    dag.edges.setdefault(earlier_sid, set()).add(sid)
+                    dag.reverse_edges.setdefault(sid, set()).add(earlier_sid)
+
     return dag
 
 
@@ -1062,7 +1108,7 @@ def check_reading_order_coherence(dag: StoryDAG, outline: Outline) -> List[str]:
     return errors
 
 
-def check_essentiality_to_root(dag: StoryDAG) -> Tuple[Optional[str], List[str]]:
+def check_essentiality_to_root(dag: StoryDAG, p: Optional["Project"] = None) -> Tuple[Optional[str], List[str]]:
     """Verify that every element in the story is essential by having a directed path to the root denouement."""
     errors: List[str] = []
     if not dag.root:
@@ -1082,9 +1128,127 @@ def check_essentiality_to_root(dag: StoryDAG) -> Tuple[Optional[str], List[str]]
                 queue.append(pred)
 
     inessential = sorted([n for n in dag.nodes if n not in reachable])
+    if p and inessential:
+        for n in list(inessential):
+            sec = p.plan.defs.get(n)
+            if sec:
+                func = (sec.field_value("function", "role") or "").strip().lower()
+                artistic_functions = {
+                    "atmospheric-breather", "thematic-mirror", "comic-relief",
+                    "character-reflection", "epistolary-interlude", "pacing-breather",
+                    "breather", "thematic-pause", "reflection"
+                }
+                if func in artistic_functions:
+                    chap = p.outline.chapter_of.get(n)
+                    chap_scenes = p.outline.by_chapter.get(chap, []) if chap else []
+                    if any(s in reachable for s in chap_scenes if s != n) or not reachable:
+                        reachable.add(n)
+                        inessential.remove(n)
+
     for n in inessential:
         errors.append(f"inessential element: {n} has no causal path to the root denouement ({dag.root})")
     return dag.root, errors
+
+
+def check_epistemic_and_setup_payoffs(p: "Project") -> Tuple[List[str], List[str], List[str]]:
+    """Validate Chekhov's gun setups/payoffs and epistemic character knowledge integrity."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    infos: List[str] = []
+    o = p.outline
+    plan = p.plan
+    if not o.scenes:
+        return errors, warnings, infos
+
+    # 1. Setup & Payoff (Chekhov's Gun)
+    planted_map: Dict[str, Tuple[str, int, Section]] = {}
+    paid_off_map: Dict[str, List[Tuple[str, int, Section]]] = {}
+
+    # 2. Epistemic Tracking (Knowledge state)
+    revealed_map: Dict[str, Tuple[str, int, Set[str]]] = {}
+    hidden_from_map: Dict[str, Set[str]] = {}
+
+    for idx, sid in enumerate(o.scenes, 1):
+        sec = plan.defs.get(sid)
+        if not sec:
+            continue
+
+        plants = sec.ref_ids_for_field("plants", "plant", "setups", "setup")
+        pays_off = sec.ref_ids_for_field("pays_off", "pays-off", "paysoff", "payoff", "pays")
+        reveals = sec.ref_ids_for_field("reveals", "reveal", "revelations")
+        learns = sec.ref_ids_for_field("learns", "learn", "learners")
+        hidden_from = sec.ref_ids_for_field("hidden_from", "hidden-from", "hidden", "concealed_from")
+        cast = sec.ref_ids_for_field("cast", "characters")
+        pov = sec.ref_ids_for_field("pov")
+
+        # Track Plants
+        for pid in sorted(plants):
+            if pid not in planted_map:
+                planted_map[pid] = (sid, idx, sec)
+
+        # Track Payoffs
+        for poy_id in sorted(pays_off):
+            if poy_id not in planted_map:
+                errors.append(
+                    f"unearned payoff (Chekhov's gun violation): [[{poy_id}]] is paid off in scene {sid} (scene #{idx}), "
+                    f"but was never planted in any preceding scene"
+                )
+            else:
+                paid_off_map.setdefault(poy_id, []).append((sid, idx, sec))
+
+        # Track Reveals & Learns
+        if reveals:
+            effective_learners = learns or pov or cast
+            for rid in sorted(reveals):
+                if rid not in revealed_map:
+                    revealed_map[rid] = (sid, idx, set(effective_learners))
+                else:
+                    revealed_map[rid][2].update(effective_learners)
+
+                if hidden_from:
+                    hidden_from_map.setdefault(rid, set()).update(hidden_from)
+                    contradiction = set(effective_learners) & set(hidden_from)
+                    if contradiction:
+                        errors.append(
+                            f"epistemic contradiction in scene {sid}: {', '.join(sorted(contradiction))} is declared as both learning and hidden from [[{rid}]]"
+                        )
+
+        # Epistemic violations: characters acting on secrets they don't know
+        if hidden_from_map:
+            for rid, excluded_chars in hidden_from_map.items():
+                if (cast & excluded_chars) or (pov & excluded_chars):
+                    if rid in pays_off or rid in sec.prereq_ids():
+                        present_excluded = sorted((cast | pov) & excluded_chars)
+                        already_learned = False
+                        if rid in revealed_map and any(c in revealed_map[rid][2] for c in present_excluded):
+                            already_learned = True
+                        if not already_learned:
+                            errors.append(
+                                f"epistemic violation in scene {sid}: character(s) {', '.join(present_excluded)} act on [[{rid}]] while it was declared hidden from them"
+                            )
+
+    # Check for Orphan Plants
+    for pid, (sid, idx, sec) in sorted(planted_map.items(), key=lambda x: x[1][1]):
+        if pid not in paid_off_map:
+            errors.append(
+                f"orphan plant (Chekhov's gun violation): [[{pid}]] is planted in scene {sid} (scene #{idx}), "
+                f"but is never paid off in any downstream scene"
+            )
+        else:
+            first_pay_idx = paid_off_map[pid][0][1]
+            gap = first_pay_idx - idx
+            total_scenes = len(o.scenes)
+            if total_scenes > 8 and gap >= total_scenes * 0.8:
+                warnings.append(
+                    f"prolonged setup-payoff gap: [[{pid}]] is planted in scene #{idx} ({sid}) and paid off in scene #{first_pay_idx} ({paid_off_map[pid][0][0]}) across {gap} scenes"
+                )
+
+    if planted_map and not errors:
+        infos.append(f"Chekhov's gun validation passed: {len(planted_map)} setup/payoff pairs verified across outline.")
+    if revealed_map and not errors:
+        infos.append(f"epistemic validation passed: {len(revealed_map)} narrative reveals verified with coherent character knowledge.")
+
+    return errors, warnings, infos
 
 
 def run_dag_checks(p: Project) -> Tuple[List[str], List[str], List[str]]:
@@ -1108,7 +1272,7 @@ def run_dag_checks(p: Project) -> Tuple[List[str], List[str], List[str]]:
     errors += ro_errors
 
     # 3. Essentiality to root denouement (path to root)
-    root, ess_errors = check_essentiality_to_root(dag)
+    root, ess_errors = check_essentiality_to_root(dag, p)
     errors += ess_errors
 
     if not (cycles or ro_errors or ess_errors):
@@ -1138,7 +1302,7 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
             if dp.is_dir():
                 for f in dp.rglob("*.md"):
                     rel = f.relative_to(root).as_posix()
-                    if rel == "kb/INDEX.md" or rel.startswith("kb/sources/"):
+                    if rel == "kb/INDEX.md" or rel.startswith("kb/sources/") or rel.startswith("story/scenarios/") or rel.startswith("story/takes/"):
                         continue
                     files.append(rel)
         files.sort()
@@ -1526,6 +1690,12 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     errors += dag_errors
     warnings += dag_warnings
     infos += dag_infos
+
+    # Chekhov's gun (plants/payoffs) and epistemic character knowledge integrity
+    ep_errors, ep_warnings, ep_infos = check_epistemic_and_setup_payoffs(p)
+    errors += ep_errors
+    warnings += ep_warnings
+    infos += ep_infos
 
     # derived layers
     for name, d in p.layers.items():
@@ -1996,7 +2166,7 @@ def cmd_dag(git: Git, args) -> int:
     dag = build_story_dag(p)
     cycles = check_dag_cycles(dag)
     ro_errors = check_reading_order_coherence(dag, p.outline)
-    root, ess_errors = check_essentiality_to_root(dag)
+    root, ess_errors = check_essentiality_to_root(dag, p)
     total_edges = sum(len(v) for v in dag.edges.values())
 
     if args.json:
@@ -3109,6 +3279,809 @@ def cmd_placeholders(git: Git, args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ harvest, scenario, audit, takes
+STOPWORDS_LOWER = {
+    "the", "a", "an", "this", "that", "these", "those", "he", "she", "it", "they", "we", "you", "i",
+    "his", "her", "their", "our", "my", "your", "its", "then", "there", "here", "what", "where", "when",
+    "why", "how", "who", "whom", "whose", "if", "as", "while", "after", "before", "once", "since",
+    "until", "although", "though", "even", "because", "but", "and", "or", "so", "yet", "for", "nor",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+    "november", "december", "mr", "mrs", "ms", "miss", "dr", "sir", "madam", "lady", "lord", "captain",
+    "suddenly", "meanwhile", "later", "yesterday", "today", "tomorrow", "tonight", "everybody", "everyone",
+    "somebody", "someone", "nobody", "no one", "everything", "something", "nothing"
+}
+
+
+def extract_entities_and_beats_from_prose(text: str, p: Project) -> Dict[str, Any]:
+    words = WORD_RE.findall(text)
+    total_words = len(words)
+
+    # 1. Candidate title
+    title_match = re.search(r"^(?:#{1,3})\s+(?:(?:SCN-\d+[:\s]+)?(.+)|(.+))", text, re.M)
+    if title_match:
+        candidate_title = (title_match.group(1) or title_match.group(2) or "").strip()
+    else:
+        first_line = next((l.strip() for l in text.splitlines() if l.strip()), "Harvested Scene")
+        first_line = re.sub(r"^[#\s\-*]+", "", first_line)
+        candidate_title = first_line[:40].strip()
+
+    # 2. Dialogues
+    dialogues: List[str] = []
+    d_matches = re.findall(r'["“]([^"”]+)["”]', text)
+    for dm in d_matches:
+        dm_clean = dm.strip()
+        if len(dm_clean.split()) >= 2:
+            dialogues.append(dm_clean)
+
+    # 3. Characters
+    attr_verbs = (
+        r"(?:said|asked|replied|answered|whispered|muttered|shouted|yelled|cried|sighed|"
+        r"gasped|groaned|laughed|chuckled|nodded|repeated|insisted|snapped|murmured)"
+    )
+    char_candidates: Set[str] = set()
+
+    for m in re.finditer(rf'["”]\s*{attr_verbs}\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)', text, re.I):
+        name = m.group(1).strip()
+        if name.lower() not in STOPWORDS_LOWER:
+            char_candidates.add(name)
+
+    for m in re.finditer(rf'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+{attr_verbs}\b', text):
+        name = m.group(1).strip()
+        if name.lower() not in STOPWORDS_LOWER:
+            char_candidates.add(name)
+
+    if len(char_candidates) < 2:
+        for m in re.finditer(r'\b([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})\b', text):
+            cand = m.group(1).strip()
+            w1, w2 = cand.split(maxsplit=1)
+            if w1.lower() not in STOPWORDS_LOWER and w2.lower() not in STOPWORDS_LOWER:
+                char_candidates.add(cand)
+
+    # 4. Places
+    place_candidates: Set[str] = set()
+    place_suffixes = (
+        r"(?:Street|Avenue|Road|Boulevard|Lane|Tower|Castle|Room|Hall|Bridge|"
+        r"Station|Harbor|Port|Forest|Mountain|City|Town|Village|Cafe|Bar|Pub|Library|Office|Chamber|Palace|Hotel|Inn)"
+    )
+    for m in re.finditer(rf'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+{place_suffixes})\b', text):
+        place_candidates.add(m.group(1).strip())
+
+    for m in re.finditer(r'\b(?:in|at|to|into|inside)\s+(?:the\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b', text):
+        cand = m.group(1).strip()
+        if cand.lower() not in STOPWORDS_LOWER and cand not in char_candidates:
+            place_candidates.add(cand)
+
+    # 5. Beats
+    raw_paras = [pr.strip() for pr in re.split(r'\n\s*\n', text) if pr.strip()]
+    beats: List[str] = []
+    for p_text in raw_paras:
+        if p_text.startswith("#") or p_text.startswith("***") or p_text.startswith("---"):
+            continue
+        first_sent = re.split(r'(?<=[.!?])\s+', p_text)[0].strip()
+        first_sent = re.sub(r'^[#>\-\*\s"]+', '', first_sent)
+        if len(first_sent) > 120:
+            first_sent = first_sent[:117] + "..."
+        if len(first_sent) > 15:
+            beats.append(first_sent)
+        if len(beats) >= 8:
+            break
+
+    return {
+        "word_count": total_words,
+        "candidate_title": candidate_title,
+        "characters": sorted(char_candidates),
+        "places": sorted(place_candidates),
+        "dialogues": dialogues,
+        "beats": beats
+    }
+
+
+def cmd_harvest(git: Git, args) -> int:
+    p = load_project(git)
+    draft_file = args.draft_file
+    if draft_file == "-":
+        raw_text = sys.stdin.read()
+        source_label = "stdin"
+    else:
+        path = (git.root / draft_file).resolve()
+        if not path.is_file():
+            print(f"specnovel: draft file not found: {draft_file}", file=sys.stderr)
+            return 1
+        raw_text = path.read_text(encoding="utf-8", errors="replace")
+        source_label = str(draft_file)
+
+    harvest_data = extract_entities_and_beats_from_prose(raw_text, p)
+
+    mode = "batch"
+    if getattr(args, "interactive", False):
+        mode = "interactive"
+    elif getattr(args, "batch", False):
+        mode = "batch"
+    elif getattr(p.config, "harvest_mode", "batch") == "interactive":
+        mode = "interactive"
+
+    if mode == "interactive" and sys.stdin.isatty():
+        print(f"\nHarvested draft analysis for '{source_label}':")
+        print(f"  Word count:           {harvest_data['word_count']}")
+        print(f"  Extracted Characters: {', '.join(harvest_data['characters']) or 'None'}")
+        print(f"  Extracted Places:     {', '.join(harvest_data['places']) or 'None'}")
+        print(f"  Identified Beats:     {len(harvest_data['beats'])}")
+        print(f"  Key Dialogues:        {len(harvest_data['dialogues'])}")
+        ans = input("\nProceed with scaffolding entities and candidate scene? [y/N]: ").strip().lower()
+        if ans not in ("y", "yes"):
+            print("Harvest canceled.")
+            return 0
+
+    created_files = []
+    applied = False
+
+    if getattr(args, "apply", False):
+        applied = True
+        char_links = []
+        for cname in harvest_data["characters"]:
+            existing_chr = None
+            for s in p.plan.of_type("CHR"):
+                if cname.lower() in s.title.lower() or cname.lower() in s.text.lower():
+                    existing_chr = s.id
+                    break
+            if existing_chr:
+                char_links.append(f"[[{existing_chr}|{cname}]]")
+            else:
+                cid = allocate_next_ids(git, "CHR", 1)[0]
+                cpath = git.root / f"kb/characters/{cid}.md"
+                cpath.parent.mkdir(parents=True, exist_ok=True)
+                cpath.write_text(
+                    f"# {cid}: {cname}\n- **Category:** Secondary\n- **Status:** Provisional (Harvested)\n- **Aliases:** {cname}\n\n## Overview\nProvisional character entity harvested from draft `{source_label}`.\n",
+                    encoding="utf-8"
+                )
+                char_links.append(f"[[{cid}|{cname}]]")
+                created_files.append(f"kb/characters/{cid}.md")
+
+        place_links = []
+        for pname in harvest_data["places"]:
+            existing_plc = None
+            for s in p.plan.of_type("PLC"):
+                if pname.lower() in s.title.lower() or pname.lower() in s.text.lower():
+                    existing_plc = s.id
+                    break
+            if existing_plc:
+                place_links.append(f"[[{existing_plc}|{pname}]]")
+            else:
+                pid = allocate_next_ids(git, "PLC", 1)[0]
+                ppath = git.root / f"kb/places/{pid}.md"
+                ppath.parent.mkdir(parents=True, exist_ok=True)
+                ppath.write_text(
+                    f"# {pid}: {pname}\n- **Category:** Setting\n- **Status:** Provisional (Harvested)\n\n## Overview\nProvisional place entity harvested from draft `{source_label}`.\n",
+                    encoding="utf-8"
+                )
+                place_links.append(f"[[{pid}|{pname}]]")
+                created_files.append(f"kb/places/{pid}.md")
+
+        primary_place = place_links[0] if place_links else "[[PLC-001]]"
+
+        sid = allocate_next_ids(git, "SCN", 1)[0]
+        stitle = getattr(args, "title", None) or harvest_data["candidate_title"] or f"Harvested Scene ({sid})"
+
+        chap_id = getattr(args, "chapter", None)
+        if not chap_id:
+            if p.outline.chapters:
+                chap_id = p.outline.chapters[-1]
+            else:
+                chap_id = allocate_next_ids(git, "CHP", 1)[0]
+
+        beats_md = "\n".join(f"  - {b}" for b in harvest_data["beats"]) if harvest_data["beats"] else "  - Scene progression unfolds"
+        dialogues_md = "\n".join(f"  - \"{d}\"" for d in harvest_data["dialogues"][:5]) if harvest_data["dialogues"] else "  - None captured"
+
+        scene_spec = (
+            f"\n\n### {sid}: {stitle}\n"
+            f"- **Status:** draft\n"
+            f"- **Function:** causal-progression\n"
+            f"- **When:** provisional\n"
+            f"- **Where:** {primary_place}\n"
+            f"- **Cast:** {', '.join(char_links) or 'provisional'}\n"
+            f"- **Goal / conflict / outcome:** G: provisional goal / C: provisional conflict / O: provisional outcome\n"
+            f"- **Target words:** {harvest_data['word_count']}\n"
+            f"- **Beats:**\n{beats_md}\n"
+            f"- **Key dialogue:**\n{dialogues_md}\n"
+        )
+        outline_file = git.root / "outline" / "outline.md"
+        if outline_file.is_file():
+            existing_outline = outline_file.read_text(encoding="utf-8")
+            outline_file.write_text(existing_outline + scene_spec, encoding="utf-8")
+        else:
+            outline_file.parent.mkdir(parents=True, exist_ok=True)
+            outline_file.write_text(f"# Outline\n\n## {chap_id}: Chapter\n{scene_spec}", encoding="utf-8")
+        created_files.append("outline/outline.md")
+
+        abridged_file = git.root / "abridged" / f"{chap_id}.md"
+        abridged_file.parent.mkdir(parents=True, exist_ok=True)
+        scene_body = raw_text.strip()
+        if abridged_file.is_file():
+            current_ab = abridged_file.read_text(encoding="utf-8")
+            abridged_file.write_text(current_ab + f"\n\n### {sid}: {stitle}\n\n{scene_body}\n", encoding="utf-8")
+        else:
+            abridged_file.write_text(f"# {chap_id}: Chapter\n\n### {sid}: {stitle}\n\n{scene_body}\n", encoding="utf-8")
+        created_files.append(f"abridged/{chap_id}.md")
+
+    if getattr(args, "json", False):
+        out = {
+            "source": source_label,
+            "word_count": harvest_data["word_count"],
+            "entities": {
+                "characters": harvest_data["characters"],
+                "places": harvest_data["places"],
+            },
+            "dialogue_count": len(harvest_data["dialogues"]),
+            "dialogues": harvest_data["dialogues"][:10],
+            "beats": harvest_data["beats"],
+            "candidate_title": harvest_data["candidate_title"],
+            "applied": applied,
+            "created_files": created_files
+        }
+        print(json.dumps(out, indent=2))
+        return 0
+
+    print(f"SpecNovelist Prose Harvest: {source_label}")
+    print(f"  Word count:           {harvest_data['word_count']}")
+    print(f"  Characters extracted: {', '.join(harvest_data['characters']) or 'none'}")
+    print(f"  Places extracted:     {', '.join(harvest_data['places']) or 'none'}")
+    print(f"  Beats extracted:      {len(harvest_data['beats'])}")
+    print(f"  Dialogues extracted:  {len(harvest_data['dialogues'])}")
+    if applied:
+        print("\nApplied harvest to project:")
+        for f in created_files:
+            print(f"  + {f}")
+    else:
+        print("\nDry-run mode (use --apply to scaffold KB entries, outline scene, and abridged draft).")
+    return 0
+
+
+def cmd_scenario(git: Git, args) -> int:
+    action = args.action
+    scenarios_dir = git.root / "story" / "scenarios"
+
+    if action == "list":
+        scenarios = []
+        if scenarios_dir.is_dir():
+            for sp in sorted(scenarios_dir.iterdir()):
+                if sp.is_dir() and not sp.name.startswith("."):
+                    notes_file = sp / "notes.md"
+                    desc, status, created = "", "active", ""
+                    if notes_file.is_file():
+                        nt = notes_file.read_text(encoding="utf-8", errors="replace")
+                        m_desc = re.search(r"[-*]\s*\*\*Description:\*\*\s*(.+)", nt)
+                        if m_desc: desc = m_desc.group(1).strip()
+                        m_stat = re.search(r"[-*]\s*\*\*Status:\*\*\s*(.+)", nt)
+                        if m_stat: status = m_stat.group(1).strip()
+                        m_cr = re.search(r"[-*]\s*\*\*Created:\*\*\s*(.+)", nt)
+                        if m_cr: created = m_cr.group(1).strip()
+                    outline_exists = (sp / "outline.md").is_file()
+                    scenarios.append({
+                        "name": sp.name,
+                        "status": status,
+                        "description": desc,
+                        "created": created,
+                        "has_outline": outline_exists,
+                        "path": f"story/scenarios/{sp.name}"
+                    })
+        if getattr(args, "json", False):
+            print(json.dumps(scenarios, indent=2))
+            return 0
+        if not scenarios:
+            print("No scenarios found in story/scenarios/.")
+            return 0
+        print(f"{'SCENARIO':<20} {'STATUS':<12} {'DESCRIPTION'}")
+        print("-" * 65)
+        for s in scenarios:
+            print(f"{s['name']:<20} {s['status']:<12} {s['description']}")
+        return 0
+
+    if not args.name:
+        print(f"specnovel: scenario name required for '{action}'", file=sys.stderr)
+        return 1
+
+    name = args.name
+    target_dir = scenarios_dir / name
+
+    if action == "create":
+        if target_dir.is_dir():
+            print(f"specnovel: scenario '{name}' already exists at story/scenarios/{name}", file=sys.stderr)
+            return 1
+        target_dir.mkdir(parents=True, exist_ok=True)
+        cur_outline = git.root / "outline" / "outline.md"
+        if cur_outline.is_file():
+            shutil.copy2(cur_outline, target_dir / "outline.md")
+        else:
+            (target_dir / "outline.md").write_text("# Outline\n", encoding="utf-8")
+
+        now_str = datetime.now().isoformat()
+        desc = args.message or f"Exploratory scenario: {name}"
+        head_sha = (git.run("rev-parse", "HEAD", allow_fail=True) or "")[:8] if git.has_commits() else "uncommitted"
+        notes_content = (
+            f"# Scenario: {name}\n\n"
+            f"- **Created:** {now_str}\n"
+            f"- **Description:** {desc}\n"
+            f"- **Base Commit:** {head_sha}\n"
+            f"- **Status:** active\n\n"
+            f"## Scenario Notes\n"
+            f"Record premise alterations, alternate character fates, and divergent plot trajectories here.\n"
+        )
+        (target_dir / "notes.md").write_text(notes_content, encoding="utf-8")
+        if getattr(args, "json", False):
+            print(json.dumps({"scenario": name, "created": True, "path": f"story/scenarios/{name}"}))
+        else:
+            print(f"Created scenario '{name}' at story/scenarios/{name}/")
+        return 0
+
+    if not target_dir.is_dir():
+        print(f"specnovel: scenario '{name}' not found at story/scenarios/{name}", file=sys.stderr)
+        return 1
+
+    scen_outline = target_dir / "outline.md"
+    main_outline = git.root / "outline" / "outline.md"
+
+    if action == "diff":
+        scen_txt = scen_outline.read_text(encoding="utf-8", errors="replace") if scen_outline.is_file() else ""
+        main_txt = main_outline.read_text(encoding="utf-8", errors="replace") if main_outline.is_file() else ""
+        diff_lines = list(difflib.unified_diff(
+            main_txt.splitlines(keepends=True),
+            scen_txt.splitlines(keepends=True),
+            fromfile="outline/outline.md (main)",
+            tofile=f"story/scenarios/{name}/outline.md",
+        ))
+        if getattr(args, "json", False):
+            print(json.dumps({"scenario": name, "diff": "".join(diff_lines), "has_diff": bool(diff_lines)}))
+            return 0
+        if not diff_lines:
+            print(f"No differences between main outline and scenario '{name}'.")
+        else:
+            sys.stdout.writelines(diff_lines)
+        return 0
+
+    if action == "activate":
+        if not scen_outline.is_file():
+            print(f"specnovel: scenario '{name}' has no outline.md", file=sys.stderr)
+            return 1
+        backup_file = scenarios_dir / ".previous_main_outline.md"
+        if main_outline.is_file():
+            shutil.copy2(main_outline, backup_file)
+        shutil.copy2(scen_outline, main_outline)
+        if getattr(args, "json", False):
+            print(json.dumps({"scenario": name, "activated": True}))
+        else:
+            print(f"Activated scenario '{name}': outline/outline.md replaced with scenario outline.")
+            print("Previous outline backed up to story/scenarios/.previous_main_outline.md")
+        return 0
+
+    if action == "merge":
+        if not scen_outline.is_file():
+            print(f"specnovel: scenario '{name}' has no outline.md", file=sys.stderr)
+            return 1
+        shutil.copy2(scen_outline, main_outline)
+        notes_file = target_dir / "notes.md"
+        if notes_file.is_file():
+            nt = notes_file.read_text(encoding="utf-8")
+            nt = re.sub(r"(\*\*Status:\*\*)\s*[^\n]+", r"\1 merged", nt)
+            notes_file.write_text(nt, encoding="utf-8")
+        if getattr(args, "json", False):
+            print(json.dumps({"scenario": name, "merged": True}))
+        else:
+            print(f"Merged scenario '{name}' into outline/outline.md.")
+        return 0
+
+    if action == "delete":
+        shutil.rmtree(target_dir)
+        if getattr(args, "json", False):
+            print(json.dumps({"scenario": name, "deleted": True}))
+        else:
+            print(f"Deleted scenario '{name}' from story/scenarios/{name}.")
+        return 0
+
+    return 0
+
+
+def cmd_audit(git: Git, args) -> int:
+    p = load_project(git)
+    scene_ids = p.outline.scenes
+
+    pacing_waveform = []
+    character_agency = OrderedDict()
+    all_plants = OrderedDict()
+    all_payoffs = OrderedDict()
+    secrets_revealed = OrderedDict()
+    consecutive_slow_scenes = []
+    current_slow_run = []
+
+    total_words_outline = 0
+    total_words_actual = 0
+    total_dialogue_words = 0
+
+    for chr_sec in p.plan.of_type("CHR"):
+        character_agency[chr_sec.id] = {
+            "id": chr_sec.id,
+            "name": chr_sec.title,
+            "cast_count": 0,
+            "pov_count": 0,
+            "scenes": []
+        }
+
+    for idx, sid in enumerate(scene_ids, 1):
+        outline_sec = p.plan.defs.get(sid)
+        title = outline_sec.title if outline_sec else sid
+        ch_id = p.outline.chapter_of.get(sid, "CHP-???")
+
+        target_wc = target_words(outline_sec)
+        total_words_outline += target_wc
+
+        derived_sec = p.layers["manuscript"].scenes.get(sid) or p.layers["abridged"].scenes.get(sid)
+        actual_wc = 0
+        dialogue_wc = 0
+        dialogue_ratio = 0.0
+        avg_sentence_len = 0.0
+        sentence_count = 0
+        paragraph_count = 0
+
+        if derived_sec:
+            raw_text = "\n".join(derived_sec.lines)
+            actual_wc = word_count(derived_sec.lines)
+            total_words_actual += actual_wc
+
+            quotes = re.findall(r'["“]([^"”]+)["”]', raw_text)
+            for q in quotes:
+                dialogue_wc += len(WORD_RE.findall(q))
+            total_dialogue_words += dialogue_wc
+            if actual_wc > 0:
+                dialogue_ratio = round(dialogue_wc / actual_wc, 2)
+
+            clean_prose = re.sub(r'#+.*', '', raw_text)
+            sents = [s.strip() for s in re.split(r'[.!?]+', clean_prose) if s.strip() and len(WORD_RE.findall(s)) > 1]
+            sentence_count = len(sents)
+            if sentence_count > 0:
+                avg_sentence_len = round(actual_wc / sentence_count, 1)
+
+            paras = [pr.strip() for pr in re.split(r'\n\s*\n', clean_prose) if pr.strip()]
+            paragraph_count = len(paras)
+        else:
+            actual_wc = target_wc
+
+        waveform_entry = {
+            "index": idx,
+            "scene": sid,
+            "title": title,
+            "chapter": ch_id,
+            "target_words": target_wc,
+            "actual_words": actual_wc,
+            "dialogue_ratio": dialogue_ratio,
+            "avg_sentence_len": avg_sentence_len,
+            "sentences": sentence_count,
+            "paragraphs": paragraph_count
+        }
+        pacing_waveform.append(waveform_entry)
+
+        if outline_sec:
+            pov_val = outline_sec.field_value("pov") or ""
+            for chr_id in character_agency:
+                if chr_id in pov_val:
+                    character_agency[chr_id]["pov_count"] += 1
+
+            cast_val = outline_sec.field_value("cast") or ""
+            for chr_id in character_agency:
+                if chr_id in cast_val or any(r[0] == chr_id for r in outline_sec.refs):
+                    character_agency[chr_id]["cast_count"] += 1
+                    character_agency[chr_id]["scenes"].append(sid)
+
+            plants_str = outline_sec.field_value("plants") or ""
+            for m in REF_RE.finditer(plants_str):
+                eid = m.group("id")
+                all_plants.setdefault(eid, []).append({"scene": sid, "index": idx, "chapter": ch_id})
+
+            payoffs_str = outline_sec.field_value("pays_off") or outline_sec.field_value("paysoff") or ""
+            for m in REF_RE.finditer(payoffs_str):
+                eid = m.group("id")
+                all_payoffs.setdefault(eid, []).append({"scene": sid, "index": idx, "chapter": ch_id})
+
+            reveals_str = outline_sec.field_value("reveals") or ""
+            learns_str = outline_sec.field_value("learns") or ""
+            hidden_str = outline_sec.field_value("hidden_from") or ""
+            if reveals_str:
+                for m in REF_RE.finditer(reveals_str):
+                    sec_id = m.group("id")
+                    learners = [rm.group("id") for rm in REF_RE.finditer(learns_str)]
+                    hidden = [rm.group("id") for rm in REF_RE.finditer(hidden_str)]
+                    secrets_revealed[sec_id] = {
+                        "scene": sid,
+                        "chapter": ch_id,
+                        "index": idx,
+                        "learns": learners,
+                        "hidden_from": hidden
+                    }
+
+            has_plt = any(r[0].startswith("PLT-") for r in outline_sec.refs)
+            fn_tag = (outline_sec.field_value("function") or "").lower()
+            is_slow = (actual_wc > 1500 or (target_wc > 0 and actual_wc >= target_wc)) and not has_plt and fn_tag not in ("climactic-turn", "turning-point", "denouement")
+            if is_slow:
+                current_slow_run.append(sid)
+            else:
+                if len(current_slow_run) >= 2:
+                    consecutive_slow_scenes.append(list(current_slow_run))
+                current_slow_run = []
+
+    if len(current_slow_run) >= 2:
+        consecutive_slow_scenes.append(list(current_slow_run))
+
+    chekhov_matrix = []
+    for eid, plants in all_plants.items():
+        payoffs = all_payoffs.get(eid, [])
+        for pl in plants:
+            for po in payoffs:
+                gap = po["index"] - pl["index"]
+                flag = "optimal"
+                if gap <= 1:
+                    flag = "immediate_payoff (anticlimax risk: setup paid off in same or next scene)"
+                elif gap > 10:
+                    flag = "long_dormant (dormant for >10 scenes without progression)"
+                chekhov_matrix.append({
+                    "entity": eid,
+                    "plant_scene": pl["scene"],
+                    "payoff_scene": po["scene"],
+                    "scene_gap": gap,
+                    "assessment": flag
+                })
+
+    overall_dialogue_ratio = round(total_dialogue_words / max(total_words_actual, 1), 2)
+
+    if getattr(args, "json", False):
+        res = {
+            "summary": {
+                "total_scenes": len(scene_ids),
+                "target_words": total_words_outline,
+                "actual_words": total_words_actual,
+                "overall_dialogue_ratio": overall_dialogue_ratio,
+                "pacing_sags_detected": len(consecutive_slow_scenes)
+            },
+            "waveform": pacing_waveform,
+            "character_agency": list(character_agency.values()),
+            "chekhov_matrix": chekhov_matrix,
+            "epistemic_matrix": secrets_revealed,
+            "pacing_sag_sequences": consecutive_slow_scenes
+        }
+        print(json.dumps(res, indent=2))
+        return 0
+
+    print("=" * 80)
+    print("DEVELOPMENTAL EDITORIAL TELEMETRY & PACING AUDIT")
+    print("=" * 80)
+    print(f"Total outline target words: {total_words_outline:,}")
+    print(f"Total actual prose words:   {total_words_actual:,}")
+    print(f"Overall dialogue ratio:     {overall_dialogue_ratio:.0%}")
+    print(f"Total cataloged scenes:     {len(scene_ids)}")
+
+    print("\n" + "-" * 80)
+    print("1. PACING WAVEFORM & SCENE RHYTHM")
+    print("-" * 80)
+    print(f"{'#':<3} {'SCENE':<9} {'CHAPTER':<9} {'WORDS':<7} {'DLG %':<6} {'AVG-SNT':<8} {'WAVEFORM'}")
+    print("-" * 80)
+    for w in pacing_waveform:
+        wc = w["actual_words"]
+        bars = "█" * min(25, max(1, wc // 100)) if wc > 0 else "-"
+        flags = ""
+        if w["dialogue_ratio"] > 0.8:
+            flags = " [HIGH DLG >80%]"
+        elif wc > 0 and w["dialogue_ratio"] < 0.05:
+            flags = " [LOW DLG <5%]"
+        print(f"{w['index']:<3} {w['scene']:<9} {w['chapter']:<9} {wc:<7} {w['dialogue_ratio']:<6.0%} {w['avg_sentence_len']:<8.1f} {bars}{flags}")
+
+    print("\n" + "-" * 80)
+    print("2. CHARACTER AGENCY & SCREEN-TIME DISTRIBUTION")
+    print("-" * 80)
+    print(f"{'ID':<10} {'NAME':<24} {'POV SCENES':<12} {'CAST SCENES':<12} {'COVERAGE %'}")
+    print("-" * 80)
+    tot_scns = max(len(scene_ids), 1)
+    for c in character_agency.values():
+        c_count = c["cast_count"]
+        cov = (c_count / tot_scns) * 100
+        print(f"{c['id']:<10} {c['name'][:23]:<24} {c['pov_count']:<12} {c_count:<12} {cov:.0f}%")
+
+    print("\n" + "-" * 80)
+    print("3. CHEKHOV'S GUN SETUP & PAYOFF MATRIX")
+    print("-" * 80)
+    if not chekhov_matrix:
+        print("No paired plants and payoffs tracked in outline (or all isolated).")
+    else:
+        print(f"{'ENTITY':<12} {'PLANT':<10} {'PAYOFF':<10} {'GAP':<5} {'ASSESSMENT'}")
+        print("-" * 80)
+        for ck in chekhov_matrix:
+            print(f"{ck['entity']:<12} {ck['plant_scene']:<10} {ck['payoff_scene']:<10} {ck['scene_gap']:<5} {ck['assessment']}")
+
+    print("\n" + "-" * 80)
+    print("4. EPISTEMIC KNOWLEDGE MATRIX (SECRETS & REVELATIONS)")
+    print("-" * 80)
+    if not secrets_revealed:
+        print("No epistemic secrets (Reveals / Learns / Hidden From) registered in outline.")
+    else:
+        print(f"{'SECRET':<12} {'SCENE':<10} {'LEARNED BY':<25} {'HIDDEN FROM'}")
+        print("-" * 80)
+        for sec_id, data in secrets_revealed.items():
+            l_str = ", ".join(data["learns"]) or "all"
+            h_str = ", ".join(data["hidden_from"]) or "none"
+            print(f"{sec_id:<12} {data['scene']:<10} {l_str[:24]:<25} {h_str}")
+
+    print("\n" + "-" * 80)
+    print("5. PACING SAG DETECTOR & DEVELOPMENTAL FLAGS")
+    print("-" * 80)
+    if consecutive_slow_scenes:
+        for seq in consecutive_slow_scenes:
+            print(f"[WARNING] Potential pacing sag sequence: scenes {', '.join(seq)} (2+ consecutive long scenes with no major plot progression).")
+    else:
+        print("No pacing sags detected. Narrative progression is evenly distributed.")
+    print("=" * 80)
+    return 0
+
+
+def cmd_takes(git: Git, args) -> int:
+    p = load_project(git)
+    action = args.action
+    scene_id = args.id
+    takes_base = git.root / "story" / "takes"
+
+    if action == "list":
+        takes_found = []
+        if takes_base.is_dir():
+            target_dirs = [takes_base / scene_id] if (scene_id and scene_id != "all") else sorted(takes_base.iterdir())
+            for d in target_dirs:
+                if d.is_dir():
+                    sid = d.name
+                    for tf in sorted(d.glob("*.md")):
+                        txt = tf.read_text(encoding="utf-8", errors="replace")
+                        fm = front_matter(txt)
+                        wc = word_count(txt.splitlines())
+                        takes_found.append({
+                            "scene": sid,
+                            "take": tf.stem,
+                            "path": tf.relative_to(git.root).as_posix(),
+                            "layer": fm.get("layer", "manuscript"),
+                            "saved_at": fm.get("saved_at", ""),
+                            "notes": fm.get("notes", ""),
+                            "word_count": wc
+                        })
+        if getattr(args, "json", False):
+            print(json.dumps(takes_found, indent=2))
+            return 0
+        if not takes_found:
+            print(f"No takes found for scene '{scene_id}'.")
+            return 0
+        print(f"{'SCENE':<10} {'TAKE':<20} {'WORDS':<8} {'SAVED AT':<20} {'NOTES'}")
+        print("-" * 75)
+        for tk in takes_found:
+            print(f"{tk['scene']:<10} {tk['take']:<20} {tk['word_count']:<8} {tk['saved_at'][:19]:<20} {tk['notes']}")
+        return 0
+
+    if not getattr(args, "take", None):
+        print(f"specnovel: take name required for '{action}'", file=sys.stderr)
+        return 1
+
+    take_name = args.take
+    scene_take_dir = takes_base / scene_id
+    take_file = scene_take_dir / f"{take_name}.md"
+
+    if action == "save":
+        layer = getattr(args, "layer", None) or "manuscript"
+        target_layer = p.layers.get(layer)
+        if not target_layer or scene_id not in target_layer.scenes:
+            print(f"specnovel: scene '{scene_id}' not found in layer '{layer}'", file=sys.stderr)
+            return 1
+        scene_sec = target_layer.scenes[scene_id]
+        scene_take_dir.mkdir(parents=True, exist_ok=True)
+
+        now_str = datetime.now().isoformat()
+        notes_str = getattr(args, "message", "") or f"Snapshot of {scene_id} ({layer})"
+        content = (
+            f"---\n"
+            f"scene: {scene_id}\n"
+            f"take: {take_name}\n"
+            f"layer: {layer}\n"
+            f"saved_at: {now_str}\n"
+            f"notes: {notes_str}\n"
+            f"---\n\n"
+            + "\n".join(scene_sec.lines) + "\n"
+        )
+        take_file.write_text(content, encoding="utf-8")
+        if getattr(args, "json", False):
+            print(json.dumps({"scene": scene_id, "take": take_name, "saved": True, "path": take_file.relative_to(git.root).as_posix()}))
+        else:
+            print(f"Saved take '{take_name}' for {scene_id} at {take_file.relative_to(git.root).as_posix()}")
+        return 0
+
+    if action == "diff":
+        if not take_file.is_file():
+            print(f"specnovel: take '{take_name}' not found at {take_file.relative_to(git.root).as_posix()}", file=sys.stderr)
+            return 1
+        t1_txt = take_file.read_text(encoding="utf-8", errors="replace")
+        t1_prose = FRONT_RE.sub("", t1_txt).strip()
+        t1_lines = [l + "\n" for l in t1_prose.splitlines()]
+
+        if getattr(args, "take2", None):
+            take2_file = scene_take_dir / f"{args.take2}.md"
+            if not take2_file.is_file():
+                print(f"specnovel: take2 '{args.take2}' not found", file=sys.stderr)
+                return 1
+            t2_txt = take2_file.read_text(encoding="utf-8", errors="replace")
+            t2_prose = FRONT_RE.sub("", t2_txt).strip()
+            t2_lines = [l + "\n" for l in t2_prose.splitlines()]
+            from_name = f"take:{take_name}"
+            to_name = f"take:{args.take2}"
+        else:
+            layer = getattr(args, "layer", None) or "manuscript"
+            target_layer = p.layers.get(layer)
+            if not target_layer or scene_id not in target_layer.scenes:
+                print(f"specnovel: scene '{scene_id}' not found in active layer '{layer}'", file=sys.stderr)
+                return 1
+            scene_sec = target_layer.scenes[scene_id]
+            t2_lines = [l + "\n" for l in scene_sec.lines]
+            from_name = f"take:{take_name}"
+            to_name = f"active:{layer}/{scene_id}"
+
+        diff = list(difflib.unified_diff(t1_lines, t2_lines, fromfile=from_name, tofile=to_name))
+        if getattr(args, "json", False):
+            print(json.dumps({"scene": scene_id, "diff": "".join(diff), "has_diff": bool(diff)}))
+            return 0
+        if not diff:
+            print(f"No differences between {from_name} and {to_name}.")
+        else:
+            sys.stdout.writelines(diff)
+        return 0
+
+    if action == "activate":
+        if not take_file.is_file():
+            print(f"specnovel: take '{take_name}' not found at {take_file.relative_to(git.root).as_posix()}", file=sys.stderr)
+            return 1
+        layer = getattr(args, "layer", None) or "manuscript"
+        target_layer = p.layers.get(layer)
+        if not target_layer or scene_id not in target_layer.scenes:
+            print(f"specnovel: scene '{scene_id}' not found in active layer '{layer}'", file=sys.stderr)
+            return 1
+        scene_sec = target_layer.scenes[scene_id]
+
+        take_txt = take_file.read_text(encoding="utf-8", errors="replace")
+        take_prose = FRONT_RE.sub("", take_txt).strip()
+
+        file_path = git.root / scene_sec.file
+        content = file_path.read_text(encoding="utf-8", errors="replace")
+        lines = content.splitlines()
+
+        start_idx = scene_sec.line - 1
+        end_idx = len(lines)
+        for i in range(start_idx + 1, len(lines)):
+            hm = HEADING_RE.match(lines[i])
+            if hm and len(hm.group(1)) <= scene_sec.level:
+                end_idx = i
+                break
+
+        new_lines = lines[:start_idx] + take_prose.splitlines() + lines[end_idx:]
+        file_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+        if getattr(args, "json", False):
+            print(json.dumps({"scene": scene_id, "activated_take": take_name, "file": scene_sec.file}))
+        else:
+            print(f"Activated take '{take_name}' into {scene_sec.file} for scene {scene_id}.")
+        return 0
+
+    if action == "delete":
+        if take_file.is_file():
+            take_file.unlink()
+            if getattr(args, "json", False):
+                print(json.dumps({"scene": scene_id, "deleted_take": take_name}))
+            else:
+                print(f"Deleted take '{take_name}' for scene {scene_id}.")
+            return 0
+        else:
+            print(f"specnovel: take '{take_name}' not found", file=sys.stderr)
+            return 1
+
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="specnovel", description=__doc__.split("\n\n")[0])
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
@@ -3129,10 +4102,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("index", "regenerate kb/INDEX.md (catalog of all IDs)"),
              ("stats", "word counts per chapter/scene vs targets"),
              ("compile", "assemble the novel in reading order into build/"),
-             ("log", "list sync commits")]
+             ("log", "list sync commits"),
+             ("harvest", "extract characters, places, dialogue and outline beats from raw text/draft"),
+             ("scenario", "manage folder-based outline/spec scenarios (story/scenarios/<name>/)"),
+             ("audit", "developmental editorial telemetry: pacing waveform, dialogue ratio, agency, Chekhov guns"),
+             ("takes", "manage versioned scene takes (story/takes/<SCN-ID>/<take-name>.md)")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders", "bibliography", "models"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders", "bibliography", "models", "harvest", "scenario", "audit", "takes"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
         if name == "bibliography":
             p.add_argument("--format", choices=["md", "json"], default="md")
@@ -3181,6 +4158,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--cover", help="custom cover image path (default: auto-detect from graphics/ or config)")
             p.add_argument("--css", help="custom CSS stylesheet for EPUB/HTML")
             p.add_argument("--pdf-engine", help="PDF engine for pandoc (e.g. xelatex, pdflatex, weasyprint, typst)")
+        if name == "harvest":
+            p.add_argument("draft_file", help="path to raw text or markdown draft file (or '-' for stdin)")
+            p.add_argument("--apply", action="store_true", help="scaffold extracted entities into kb/ and outline/ and draft into abridged/")
+            p.add_argument("--interactive", action="store_true", help="prompt author for entity names and titles")
+            p.add_argument("--batch", action="store_true", help="non-interactive batch ingestion")
+            p.add_argument("-t", "--title", help="provisional title for the harvested scene")
+            p.add_argument("--chapter", help="target chapter ID (e.g. CHP-001) to attach harvested scene")
+        if name == "scenario":
+            p.add_argument("action", choices=["create", "list", "diff", "activate", "merge", "delete"], help="scenario action")
+            p.add_argument("name", nargs="?", help="scenario name")
+            p.add_argument("-m", "--message", default="", help="description or notes for scenario creation")
+        if name == "audit":
+            p.add_argument("--developmental", action="store_true", default=True, help="include full developmental telemetry")
+        if name == "takes":
+            p.add_argument("action", choices=["list", "save", "diff", "activate", "delete"], help="take action")
+            p.add_argument("id", nargs="?", default="all", help="scene ID, e.g. SCN-001")
+            p.add_argument("take", nargs="?", help="take name (e.g. first-person, noir, v2)")
+            p.add_argument("take2", nargs="?", help="second take name for diffing two takes")
+            p.add_argument("--layer", choices=["manuscript", "abridged"], default="manuscript", help="target layer")
+            p.add_argument("--locale", help="target manuscript locale (default: primary language)")
+            p.add_argument("-m", "--message", default="", help="notes or description for saving a take")
     args = ap.parse_args(argv)
     if not args.command:
         args.command, args.json = "status", False
@@ -3190,7 +4188,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
                 "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
                 "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback,
-                "placeholders": cmd_placeholders, "bibliography": cmd_bibliography, "models": cmd_models}
+                "placeholders": cmd_placeholders, "bibliography": cmd_bibliography, "models": cmd_models,
+                "harvest": cmd_harvest, "scenario": cmd_scenario, "audit": cmd_audit, "takes": cmd_takes}
     try:
         if args.command == "init":
             return cmd_init(root, args)

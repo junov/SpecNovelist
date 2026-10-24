@@ -32,11 +32,17 @@ chapter-level information; references there apply to all of its scenes (e.g. cha
 ```markdown
 #### SCN-014: The collision
 - **Prerequisites:** [[SCN-006]], [[PLT-001]]
+- **Function:** causal-progression (or atmospheric-breather, thematic-mirror, comic-relief, character-reflection, epistolary-interlude, pacing-breather)
 - **When:** 1912-04-14, 23:40 ship's time ([[TML-004]])
 - **Where:** [[PLC-007]]
 - **POV:** [[CHR-001]]
 - **Cast:** [[CHR-001]], [[CHR-003]], an unnamed steward
 - **Plot:** escalates [[PLT-001]]; pays off [[PLT-005]] (setup in SCN-006)
+- **Plants:** [[OBJ-003]] (Chekhov gun setup; must eventually be paid off)
+- **Pays off:** [[OBJ-001]] (Chekhov gun payoff; verifies earlier plant)
+- **Reveals:** [[PLT-005]] (secret or plot clue revealed)
+- **Learns:** [[CHR-001]] (characters who acquire this knowledge)
+- **Hidden From:** [[CHR-003]] (characters forbidden from possessing or acting on this knowledge)
 - **Facts:** [[FCT-030]], [[FCT-031]]
 - **World:** (futuristic or invented elements) [[WLD-002]]
 - **Graphics:** [[GFX-002]] (or placeholder [GFX: Transverse watertight bulkhead cutaway schematic showing boiler room 6])
@@ -51,7 +57,6 @@ chapter-level information; references there apply to all of its scenes (e.g. cha
   - Steward: "Nothing to worry about, miss. Go back to bed."
   - Elena: "Then why are your hands shaking?"
 - **Change:** Elena moves from irritation to fear; she now knows Karl left before the collision.
-- **Reveals:** Karl's coat missing (clue for [[PLT-005]])
 - **Target words:** 2500
 - **Provisional:** (any assumption awaiting [[RQ-012]])
 - **Denouement:** true (optional; only on the final resolving scene / root of the DAG)

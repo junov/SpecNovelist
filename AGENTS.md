@@ -139,6 +139,16 @@ by AI writing agents.
       will fail validation until the acknowledgements file is updated.
     - During compilation (`python scripts/specnovel.py compile`), the text of `story/acknowledgements.md` is injected
       verbatim into the compiled deliverable book.
+14. **Epistemic Integrity & Chekhov's Gun Setup/Payoff Engine**:
+    - Scene specs track narrative knowledge (\Reveals:\, \Learns:\, \Hidden From:\) and Chekhov's guns (\Plants:\, \Pays off:\).
+    - \python scripts/specnovel.py check\ enforces zero orphan plants, zero unearned payoffs, and blocks characters from acting on secrets hidden from them.
+    - Scenes serving authorized artistic functions (\- **Function:** atmospheric-breather\, \	hematic-mirror\, \comic-relief\, \character-reflection\, \epistolary-interlude\, \pacing-breather\) satisfy causality without artificial mechanical plot prerequisite edges.
+15. **Developmental Editorial Telemetry**:
+    - \python scripts/specnovel.py audit\ analyzes whole-manuscript pacing waveforms, dialogue density, character agency/screen-time distribution, Chekhov gun distance gaps, and pacing sag sequences.
+16. **Creative Flow, Scenario Exploration, and Versioned Scene Takes**:
+    - **Prose Harvesting**: Authors can write unstructured prose bursts first; \python scripts/specnovel.py harvest <draft-file> --apply\ reverse-engineers characters, places, dialogue, and beats into KB, outline, and abridged drafts.
+    - **Folder-Based Scenarios**: Exploratory what-if branches are stored under \story/scenarios/<name>/\ via \python scripts/specnovel.py scenario\.
+    - **Versioned Scene Takes**: Multiple prose takes can be saved, diffed, and activated via \python scripts/specnovel.py takes\.
 
 ---
 

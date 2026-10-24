@@ -31,11 +31,17 @@ Graphics: [[GFX-001]] (optional chapter header asset or placeholder [GFX: Harbor
 
 #### SCN-001: Elena receives the letter
 - **Prerequisites:** None (or list [[SCN-...]], [[PLT-...]], [[FCT-...]])
+- **Function:** causal-progression (or atmospheric-breather, thematic-mirror, comic-relief, character-reflection, epistolary-interlude, pacing-breather)
 - **When:** 1912-04-02, morning (after [[TML-002]])
 - **Where:** [[PLC-002]]
 - **POV:** [[CHR-001]]
 - **Cast:** [[CHR-001]], [[CHR-004]]
 - **Plot:** advances [[PLT-001]] (setup); plants [[PLT-007]]
+- **Plants:** [[OBJ-001]] (Chekhov gun setup; verified against future payoff)
+- **Pays off:** [[OBJ-002]] (Chekhov gun payoff; must cite earlier plant)
+- **Reveals:** [[PLT-005]] (secret or plot revelation)
+- **Learns:** [[CHR-001]], [[CHR-004]] (characters who gain this knowledge)
+- **Hidden From:** [[CHR-002]] (characters forbidden from acting on this secret)
 - **Facts:** [[FCT-003]], [[FCT-011]]
 - **World:** [[WLD-002]]
 - **Graphics:** [[GFX-001]] (or placeholder [GFX: Facsimile of the unsigned letter with wax seal], or None)

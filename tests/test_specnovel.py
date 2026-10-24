@@ -955,6 +955,220 @@ Elena opens the letter.
         self.assertIn('font-family: "Playfair Display", "Baskerville", serif;', epub_css)
         self.assertIn("line-height: 1.40;", epub_css)
 
+    def test_epistemic_and_chekhov_gun_checks_and_scene_functions(self):
+        self.write("kb/objects/OBJ-001-letter.md", "# OBJ-001: The letter\n")
+        self.write("kb/plot/PLT-001-main.md", "# PLT-001: Main plot\n- **Time:** 1912\n- **Place:** [[PLC-001]]\n")
+
+        # 1. Unearned payoff (Chekhov's gun violation)
+        outline_unearned = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Pays off:** [[OBJ-001]]"
+        )
+        self.write("outline/outline.md", outline_unearned)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("unearned payoff" in e for e in res["errors"]))
+
+        # 2. Orphan plant (Chekhov's gun violation)
+        outline_orphan = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]"
+        )
+        self.write("outline/outline.md", outline_orphan)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("orphan plant" in e for e in res["errors"]))
+
+        # 3. Valid Plant in SCN-001 and Payoff in SCN-002 resolves violation
+        outline_valid = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]"
+        ).replace(
+            "- **Facts:** [[FCT-001]]",
+            "- **Facts:** [[FCT-001]]\n- **Pays off:** [[OBJ-001]]"
+        )
+        self.write("outline/outline.md", outline_valid)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+
+        # 4. Epistemic contradiction: same character declared learning and hidden from secret
+        outline_ep_contradiction = outline_valid.replace(
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]\n- **Reveals:** [[PLT-001]]\n- **Learns:** [[CHR-001]]\n- **Hidden From:** [[CHR-001]]"
+        )
+        self.write("outline/outline.md", outline_ep_contradiction)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("epistemic contradiction" in e for e in res["errors"]))
+
+        # 5. Epistemic violation: character acts on secret while declared hidden from them
+        outline_ep_violation = outline_valid.replace(
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]\n- **Reveals:** [[PLT-001]]\n- **Learns:** [[CHR-001]]\n- **Hidden From:** [[CHR-002]]"
+        ).replace(
+            "- **Facts:** [[FCT-001]]\n- **Pays off:** [[OBJ-001]]",
+            "- **Facts:** [[FCT-001]]\n- **Pays off:** [[OBJ-001]], [[PLT-001]]"
+        )
+        self.write("outline/outline.md", outline_ep_violation)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("epistemic violation" in e for e in res["errors"]))
+
+        # 6. Atmospheric Breather function tag satisfies essentiality
+        outline_breather = outline_valid.replace(
+            "#### SCN-002: Karl refuses",
+            "#### SCN-002: Karl refuses\n- **Function:** atmospheric-breather"
+        )
+        self.write("outline/outline.md", outline_breather)
+        code, dag_res = self.json_cli("dag")
+        self.assertEqual(code, 0)
+        self.assertTrue(dag_res["ok"])
+
+    def test_harvest_ingestion_and_scaffolding(self):
+        sample_draft = (
+            "# The Harbor Rendezvous\n\n"
+            "Elena looked across the fog-shrouded piers of Southampton Harbor.\n\n"
+            '"Where is the packet?" asked Karl.\n\n'
+            '"I left it in the safe at Northam Tower," she replied.\n\n'
+            "They walked along the quay in silence as the church bells rang.\n"
+        )
+        self.write("draft_sample.txt", sample_draft)
+
+        # 1. Harvest dry run
+        code, res = self.json_cli("harvest", "draft_sample.txt")
+        self.assertEqual(code, 0)
+        self.assertGreater(res["word_count"], 20)
+        self.assertIn("Karl", res["entities"]["characters"])
+        self.assertTrue(any("Southampton Harbor" in p or "Northam Tower" in p for p in res["entities"]["places"]))
+        self.assertTrue(any("Where is the packet?" in d for d in res["dialogues"]))
+        self.assertFalse(res["applied"])
+
+        # 2. Harvest with --apply
+        code, res_apply = self.json_cli("harvest", "draft_sample.txt", "--apply", "--batch", "-t", "Harbor Rendezvous")
+        self.assertEqual(code, 0)
+        self.assertTrue(res_apply["applied"])
+        self.assertTrue((self.root / "outline" / "outline.md").is_file())
+        outline_txt = (self.root / "outline" / "outline.md").read_text(encoding="utf-8")
+        self.assertIn("Harbor Rendezvous", outline_txt)
+        self.assertIn("SCN-", outline_txt)
+
+    def test_folder_based_scenarios(self):
+        # 1. Create scenario
+        code, res = self.json_cli("scenario", "create", "alternate-ending", "-m", "Karl dies at sea")
+        self.assertEqual(code, 0)
+        self.assertTrue(res["created"])
+        scen_outline = self.root / "story" / "scenarios" / "alternate-ending" / "outline.md"
+        self.assertTrue(scen_outline.is_file())
+
+        # 2. List scenarios
+        code, scen_list = self.json_cli("scenario", "list")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(scen_list), 1)
+        self.assertEqual(scen_list[0]["name"], "alternate-ending")
+
+        # 3. Modify scenario outline and diff
+        scen_txt = scen_outline.read_text(encoding="utf-8")
+        scen_outline.write_text(scen_txt + "\n#### SCN-099: Karl dies\n- **Where:** [[PLC-001]]\n", encoding="utf-8")
+        code, diff_res = self.json_cli("scenario", "diff", "alternate-ending")
+        self.assertEqual(code, 0)
+        self.assertTrue(diff_res["has_diff"])
+        self.assertIn("SCN-099", diff_res["diff"])
+
+        # 4. Activate scenario
+        code, act_res = self.json_cli("scenario", "activate", "alternate-ending")
+        self.assertEqual(code, 0)
+        self.assertTrue(act_res["activated"])
+        main_outline_txt = (self.root / "outline" / "outline.md").read_text(encoding="utf-8")
+        self.assertIn("SCN-099: Karl dies", main_outline_txt)
+        self.assertTrue((self.root / "story" / "scenarios" / ".previous_main_outline.md").is_file())
+
+        # 5. Merge and Delete
+        code, m_res = self.json_cli("scenario", "merge", "alternate-ending")
+        self.assertEqual(code, 0)
+        code, d_res = self.json_cli("scenario", "delete", "alternate-ending")
+        self.assertEqual(code, 0)
+        self.assertFalse((self.root / "story" / "scenarios" / "alternate-ending").exists())
+
+    def test_developmental_editorial_telemetry_audit(self):
+        outline_with_data = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Plants:** [[OBJ-001]]\n- **Reveals:** [[PLT-001]]\n- **Learns:** [[CHR-001]]\n- **Hidden From:** [[CHR-002]]",
+            1
+        ).replace(
+            "- **Facts:** [[FCT-001]]",
+            "- **Facts:** [[FCT-001]]\n- **Pays off:** [[OBJ-001]]"
+        )
+        self.write("outline/outline.md", outline_with_data)
+        self.write("manuscript/en-US/CHP-001.md", "# CHP-001: The Letter\n\n## SCN-001: Elena\n\"The secret is out,\" Elena whispered into the dark room. Karl nodded.\n\n## SCN-002: Karl\n\"We must move quickly,\" Karl said, checking his revolver.\n")
+
+        code, res = self.json_cli("audit")
+        self.assertEqual(code, 0)
+        self.assertIn("summary", res)
+        self.assertGreaterEqual(res["summary"]["total_scenes"], 2)
+        self.assertIn("waveform", res)
+        self.assertEqual(len(res["waveform"]), 3)
+        self.assertGreater(res["waveform"][0]["dialogue_ratio"], 0.0)
+
+        # Chekhov gun matrix
+        self.assertIn("chekhov_matrix", res)
+        self.assertEqual(len(res["chekhov_matrix"]), 1)
+        self.assertEqual(res["chekhov_matrix"][0]["entity"], "OBJ-001")
+        self.assertEqual(res["chekhov_matrix"][0]["plant_scene"], "SCN-001")
+        self.assertEqual(res["chekhov_matrix"][0]["payoff_scene"], "SCN-002")
+
+        # Epistemic matrix
+        self.assertIn("epistemic_matrix", res)
+        self.assertIn("PLT-001", res["epistemic_matrix"])
+        self.assertEqual(res["epistemic_matrix"]["PLT-001"]["learns"], ["CHR-001"])
+        self.assertEqual(res["epistemic_matrix"]["PLT-001"]["hidden_from"], ["CHR-002"])
+
+    def test_versioned_scene_takes(self):
+        self.write(
+            "manuscript/en-US/CHP-001.md",
+            "# CHP-001: The Letter\n\n## SCN-001: Elena\nElena opened the envelope with trembling hands.\n\n## SCN-002: Karl\nKarl turned away.\n"
+        )
+
+        # 1. Save take
+        code, res = self.json_cli("takes", "save", "SCN-001", "default-third", "-m", "Third person draft")
+        self.assertEqual(code, 0)
+        self.assertTrue(res["saved"])
+        take_file = self.root / "story" / "takes" / "SCN-001" / "default-third.md"
+        self.assertTrue(take_file.is_file())
+
+        # 2. List takes
+        code, t_list = self.json_cli("takes", "list", "SCN-001")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(t_list), 1)
+        self.assertEqual(t_list[0]["take"], "default-third")
+
+        # 3. Create a second take file
+        noir_file = self.root / "story" / "takes" / "SCN-001" / "noir-first.md"
+        noir_file.write_text(
+            "---\nscene: SCN-001\ntake: noir-first\nlayer: manuscript\n---\n\n## SCN-001: Elena\nI sliced the envelope with an ivory blade.\n",
+            encoding="utf-8"
+        )
+
+        # 4. Diff takes
+        code, diff_res = self.json_cli("takes", "diff", "SCN-001", "default-third", "noir-first")
+        self.assertEqual(code, 0)
+        self.assertTrue(diff_res["has_diff"])
+        self.assertIn("ivory blade", diff_res["diff"])
+
+        # 5. Activate take into manuscript
+        code, act_res = self.json_cli("takes", "activate", "SCN-001", "noir-first")
+        self.assertEqual(code, 0)
+        self.assertEqual(act_res["activated_take"], "noir-first")
+        ms_txt = (self.root / "manuscript" / "en-US" / "CHP-001.md").read_text(encoding="utf-8")
+        self.assertIn("I sliced the envelope with an ivory blade", ms_txt)
+        # Ensure SCN-002 was not clobbered
+        self.assertIn("## SCN-002: Karl", ms_txt)
+        self.assertIn("Karl turned away.", ms_txt)
+
+        # 6. Delete take
+        code, del_res = self.json_cli("takes", "delete", "SCN-001", "default-third")
+        self.assertEqual(code, 0)
+        self.assertFalse(take_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

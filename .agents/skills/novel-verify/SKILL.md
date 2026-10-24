@@ -97,13 +97,36 @@ Continuity errors break reader immersion. Run targeted continuity audits across 
 - **Ages**: Check character ages against their birth dates in `CHR`.
 
 ### C. Information & Epistemic Audit
-- **Who knows what, when?**: Track secrets and reveals in `PLT`.
-- Ensure characters do not act on information they have not yet acquired in the narrative.
+- **Who knows what, when?**: Track secrets and reveals in outline scenes via `Reveals:`, `Learns:`, and `Hidden From:`.
+- `specnovel.py check` automatically enforces blocking checks:
+  - Characters listed under `Hidden From:` must never appear in `Learns:` or act on that knowledge.
+  - Characters cannot know secrets before the scene where they learn or witness them.
 - Ensure dramatic ironies are maintained without accidental slip-ups.
+
+### D. Chekhov's Gun Setup & Payoff Audit
+- Every entity (object, plot device, weapon, secret) planted via `- **Plants:** [[OBJ-xxx]]` must eventually have a matching `- **Pays off:** [[OBJ-xxx]]`.
+- Orphan plants (introduced but never resolved) and unearned payoffs (appearing from nowhere without an earlier plant) fail `specnovel.py check` as blocking errors.
+- Run `python scripts/specnovel.py audit` to inspect the Chekhov distance matrix: flags setups paid off too quickly (anticlimax risk) or dormant for too long (>10 scenes).
 
 ---
 
-## 3. Fact & Source Fidelity Audit
+## 3. Developmental Editorial Telemetry Audit
+Execute developmental telemetry across the novel manuscript:
+```bash
+python scripts/specnovel.py audit
+python scripts/specnovel.py audit --json
+```
+Computes and diagnoses:
+1. **Pacing Waveform**: Visualizes scene-by-scene word counts, paragraph cadence, and average sentence length across reading order.
+2. **Dialogue Ratio**: Analyzes narrative dialogue density; flags scenes with white-room dialogue (>80%) or exposition dumps (<5%).
+3. **Character Agency & Screen-Time**: Measures POV frequency and scene appearances across the cast to diagnose forgotten characters or passive protagonists.
+4. **Chekhov Gun Distance Matrix**: Analyzes gap length between setups and payoffs.
+5. **Epistemic State Tracking**: Full map of which characters know which secrets across chapters.
+6. **Pacing Sag Detector**: Identifies sequences of 2 or more long scenes with zero plot progression or dramatic turns.
+
+---
+
+## 4. Fact & Source Fidelity Audit
 
 Audits whether the manuscript honors the researched facts cataloged in `kb/facts/`:
 1. **Fact Check**: For any historical event, scientific procedure, legal process, or period object

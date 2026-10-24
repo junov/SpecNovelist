@@ -96,20 +96,31 @@ While outlining:
 Whenever the outline is created, restructured, or updated, execute the automated DAG tests and check:
 1. `python <toolkit>/scripts/specnovel.py dag`: Verifies acyclicity (it is indeed a DAG), reading
    order coherence (each element in the outline is preceded by all its prerequisites), and
-   essentiality (every element has a causal path to the root denouement).
-2. `python <toolkit>/scripts/specnovel.py check`: Comprehensive validation (all references resolve,
-   no dangling links, facts are sourced, scenes nested in chapters, DAG checks pass).
+   essentiality (every element has a causal path to the root denouement, taking authorized scene functions into account).
+2. `python <toolkit>/scripts/specnovel.py audit`: Developmental editorial telemetry auditing:
+   - Pacing waveform: scene-by-scene word count, average sentence length, paragraph cadence.
+   - Dialogue balance: dialogue percentage and warnings for white-room or monologue extremes.
+   - Character agency: POV and Cast distribution across scenes.
+   - Chekhov's gun tracking: setup vs payoff scene distance (flags immediate payoffs or long dormant setups).
+   - Epistemic matrix: secrets revealed vs who learns vs who is kept in the dark.
+   - Pacing sag detection: sequences of 2+ long scenes with no major plot progression.
+3. `python <toolkit>/scripts/specnovel.py check`: Comprehensive validation (all references resolve,
+   no dangling links, facts are sourced, scenes nested in chapters, DAG checks pass, epistemic consistency verified, zero orphan plants).
 
-Then review:
-- Every `PLT` element is set up, developed and paid off (`specnovel.py trace PLT-xxx` lists its
-  scenes in reading order); every major character's arc has visible steps.
-- Every scene changes something; flag scenes with no change or no conflict.
-- POV rules from `style.md`/`brief.md` are respected (e.g. one POV per scene).
-- Pacing: target lengths sum to the overall target (`specnovel.py stats`); turning points land
-  near their intended proportions.
-- Research-dependent scenes cite the facts they rely on.
+### 5. Non-Linear Exploration & Scenarios
+- Authors can explore alternate outlines and divergent story trajectories using folder-based scenarios:
+  - `python scripts/specnovel.py scenario create <name> -m "description"`: Spawns an isolated scenario branch under `story/scenarios/<name>/`.
+  - `python scripts/specnovel.py scenario list`: Lists active exploratory scenarios.
+  - `python scripts/specnovel.py scenario diff <name>`: Compares the scenario outline against the main outline.
+  - `python scripts/specnovel.py scenario activate <name>`: Swaps the scenario outline into `outline/outline.md` for testing/compilation while backing up main.
+  - `python scripts/specnovel.py scenario merge <name>`: Promotes the scenario outline to the main outline.
 
-### 5. Approval and baseline
+### 6. Reverse-Scaffolding & Ingestion (Prose Harvesting)
+- When an author has drafted raw prose or written unstructured text bursts first:
+  - `python scripts/specnovel.py harvest <draft-file>`: Parses characters, places, dialogues, and scene beats.
+  - `python scripts/specnovel.py harvest <draft-file> --apply`: Automatically scaffolds provisional KB entries in `kb/characters/` and `kb/places/`, appends the structured scene into `outline/outline.md`, and places the raw prose into `abridged/`.
+
+### 7. Approval and baseline
 Present the outline summary (chapter list with one-liners, thread coverage, open `RQ`s, length
 budget, DAG verification status). On approval: `specnovel.py index`, then
 `specnovel.py accept --stage outline -m "Outline: <summary>"` (or `--stage plan`). Recommend `novel-abridge` next.

@@ -42,6 +42,9 @@
 - **Target Words:** 80000
 - **Tolerance Pct:** 10
 
+## Authoring
+- **Harvest Mode:** batch
+
 ## Locales
 ### en-US
 - **Quotes:** curly_double
