@@ -3,8 +3,8 @@ name: novel-author
 description: >-
   Creates, edits and reviews knowledge-base entries in a SpecNovelist novel project: characters
   (CHR), places (PLC), organizations (ORG), objects (OBJ), plot elements (PLT), themes (THM),
-  world rules (WLD) and timeline events (TML), plus edits to story/brief.md. Use when the user
-  wants to add or change a character, location, subplot, secret, invented technology, or any
+  world rules (WLD), timeline events (TML), and graphics (GFX), plus edits to story/brief.md. Use when the user
+  wants to add or change a character, location, graphic asset specification, subplot, secret, invented technology, or any
   story-bible detail, or to turn a "what if" idea into catalogued changes. Allocates permanent IDs,
   maintains [[ID]] cross-references, and reports which scenes are affected. Never edits
   abridged/ or manuscript/ (hand off to novel-sync) and never creates facts without research

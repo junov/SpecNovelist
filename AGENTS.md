@@ -19,10 +19,13 @@ by AI writing agents.
     whenever artifacts are re-rendered.
 - **`kb/`**: **The Knowledge Base (Story Bible & Fact Repository).**
   - Characters (`CHR`), Places (`PLC`), Organizations (`ORG`), Objects (`OBJ`), Plot Elements (`PLT`),
-    Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Researched Facts (`FCT`), Sources (`SRC`),
+    Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Graphics (`GFX`), Researched Facts (`FCT`), Sources (`SRC`),
     and Research Questions (`RQ`).
   - Plot elements (`PLT`) must carry valid time and place metadata to orient spatiotemporal transitions.
   - Cataloged with unique, permanent IDs (`PREFIX-NNN`) and cross-referenced with `[[ID]]` wiki-links.
+- **`graphics/`**: **Rendered Graphical Assets.**
+  - Stores rendered images, diagrams, charts, maps, artwork, and book covers rendered by the `graphics` sync stage
+    and embedded in `abridged/` and `manuscript/`.
 - **`outline/`**: **The Skeleton of the Novel in Reading Order.**
   - Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`).
   - Sets up when, where, cast, plot movement, sourced facts, goal/conflict/outcome, beats, key dialogue,
@@ -64,15 +67,15 @@ by AI writing agents.
    `story/style.md` is a binding contract for `manuscript/`. Never revert to generic "AI smooth prose".
    Adhere strictly to the POV, tense, rhythm, and anti-patterns defined in `style.md`.
 6. **Git-Native Parallel Synchronization**:
-   Project baselines are tracked using `Novel-Sync:` Git commit trailers across six decoupled stages
-   (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`). Use `specnovel.py`:
+   Project baselines are tracked using `Novel-Sync:` Git commit trailers across seven decoupled stages
+   (`brief`, `research`, `bible`, `outline`, `graphics`, `abridged`, `manuscript`). Use `specnovel.py`:
    - `python scripts/specnovel.py status`: Check catalog status, baseline drift, and scene coverage.
    - `python scripts/specnovel.py delta --stage <stage>`: Isolate changes in a specific input layer (e.g. `brief` for premise changes).
    - `python scripts/specnovel.py check`: Automated integrity checks (fails on dangling links, unsourced facts, misordered scenes, or DAG violations).
    - `python scripts/specnovel.py dag`: Validates story causality DAG (acyclicity, reading order coherence, denouement essentiality).
    - `python scripts/specnovel.py placeholders --create-rq`: Automatically converts placeholders across story specs into cataloged research questions (RQ).
-   - `python scripts/specnovel.py impact --stage <abridged|manuscript>`: Identify scenes that need (re)generation.
-   - `python scripts/specnovel.py accept --stage <stage> -m "<msg>"`: Commit synchronized changes and advance stage baselines.
+   - `python scripts/specnovel.py impact --stage <graphics|abridged|manuscript>`: Identify assets or scenes that need (re)generation.
+   - `python scripts/specnovel.py accept --stage <stage> [-m "<msg>"]`: Commit synchronized changes and advance stage baselines.
 7. **Story Causality as a DAG & Reading Order Coherence**:
    Story causality is modeled as a Directed Acyclic Graph (DAG) rooted at the novel's final denouement:
    - Every scene and plot element identifies its prerequisites (`Prerequisites: [[ID]]`).
@@ -89,6 +92,14 @@ by AI writing agents.
    Feedback that is local, situational, or prose-specific is recorded in the editorial feedback database
    (`story/editorial/EDT-NNN.md`). Whenever intermediate or final drafts are re-rendered, all active directives
    targeting that scope must be ingested and satisfied, preventing editorial regression.
+9. **Token-Optimized Graphics Asset Sync with Per-Asset Tracking**:
+   Rendered graphics (maps, diagrams, character portraits, scene artwork, book covers) are generated
+   from specifications in `kb/graphics/` (`GFX-NNN`) and stored in `/graphics`.
+   - **Story DAG Pruning (AI Token Saver)**: Only graphics entities referenced by the story DAG (in scenes
+     or as story prerequisites) are rendered during sync. Inactive assets defined in KB are skipped with zero token consumption.
+   - **Per-Asset Sync Tracking**: Sync baselines are recorded per asset via `Novel-GFX-Sync: GFX-NNN` trailers.
+     When an asset is newly re-referenced in the story DAG, the engine inspects its per-asset baseline to report
+     exactly how far out of sync it is (commits behind HEAD and which upstream prerequisites changed).
 
 ---
 
@@ -97,10 +108,10 @@ by AI writing agents.
 | Skill | Primary Role | When to Activate |
 |---|---|---|
 | **`novel-init`** | Project Bootstrapper & Discovery Interview | When starting a new novel from a synopsis, conducting the guided discovery interview, scaffolding the project, or drafting the initial brief, style guide, and KB baseline. |
-| **`novel-author`** | Story Bible & KB Authoring | When creating, editing, or reviewing characters (`CHR`), places (`PLC`), plot elements (`PLT`), themes (`THM`), world rules (`WLD`), timeline events (`TML`), or brief details. Never touches prose drafts. |
+| **`novel-author`** | Story Bible & KB Authoring | When creating, editing, or reviewing characters (`CHR`), places (`PLC`), plot elements (`PLT`), themes (`THM`), world rules (`WLD`), timeline events (`TML`), graphics (`GFX`), or brief details. Never touches prose drafts. |
 | **`novel-research`** | Sourced Online Fact Gathering | When researching historical, scientific, or current-events topics, answering research questions (`RQ`), finding primary sources, or verifying factual accuracy. Never creates facts without sources. |
 | **`novel-outline`** | Structural Skeleton Builder | When creating, restructuring, or revising the novel's skeleton in reading order (parts, chapters, scenes), auditing pacing, or checking plot thread coverage. Never writes prose. |
-| **`novel-abridge`** | Intermediate Draft Synthesizer | When synthesizing or updating the lean, condensed version of chapters in `abridged/` containing all plot elements and key dialogues with minimal description. |
-| **`novel-write`** | Final Prose Rendering | When rendering final literary prose in `manuscript/` from `abridged/` + `story/style.md` + `kb/`. Enforces style, sensory grounding, and anti-pattern bans. |
-| **`novel-sync`** | Incremental Compilation Engine | When changes in `story/`, `kb/`, or `outline/` need to be compiled and synchronized into `abridged/` and `manuscript/`, running integrity checks and advancing git baselines. |
+| **`novel-abridge`** | Intermediate Draft Synthesizer | When synthesizing or updating the lean, condensed version of chapters in `abridged/` containing all plot elements and key dialogues with minimal description, embedding active graphics. |
+| **`novel-write`** | Final Prose Rendering | When rendering final literary prose in `manuscript/` from `abridged/` + `story/style.md` + `kb/`. Enforces style, sensory grounding, graphics embedding, and anti-pattern bans. |
+| **`novel-sync`** | Incremental Compilation Engine | When changes in `story/`, `kb/`, or `outline/` need to be compiled and synchronized into `graphics/`, `abridged/`, and `manuscript/`, running integrity checks and advancing git baselines. |
 | **`novel-verify`** | Continuity & Quality Assurance | When auditing character physical continuity, timeline chronology, fact fidelity, or style guide compliance; triaging story defects; or detecting unauthorized draft drift. |

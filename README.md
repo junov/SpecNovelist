@@ -334,42 +334,56 @@ tags are stripped from the prose).
 
 ## Incremental Synchronization & Baselines (`novel-sync`)
 
-In SpecNovelist, projects evolve through decoupled specifications. Rather than treating the entire plan as a single monolithic block, SpecNovelist operates with **six parallel synchronization stages**, each tracked via Git commit trailers (`Novel-Sync:`):
+In SpecNovelist, projects evolve through decoupled specifications. Rather than treating the entire plan as a single monolithic block, SpecNovelist operates with **seven parallel synchronization stages**, each tracked via Git commit trailers (`Novel-Sync:`):
 
 1. **`brief`**: Human-owned premise and constraints (`story/synopsis.md`, `story/brief.md`).
 2. **`research`**: Sourced facts and backlog (`kb/research/`, `kb/sources/`, `kb/facts/`).
-3. **`bible`**: Story bible canon (`kb/characters/`, `kb/places/`, `kb/plot/`, `kb/world/`, `kb/timeline/`).
+3. **`bible`**: Story bible canon (`kb/characters/`, `kb/places/`, `kb/plot/`, `kb/graphics/`, `kb/world/`, `kb/timeline/`).
 4. **`outline`**: Skeleton in reading order (`outline/outline.md`).
-5. **`abridged`**: Condensed intermediate novel (`abridged/`).
-6. **`manuscript`**: Polished literary prose (`manuscript/`).
+5. **`graphics`**: Graphical asset renderings (`graphics/`, from `kb/graphics/`).
+6. **`abridged`**: Condensed intermediate novel (`abridged/`).
+7. **`manuscript`**: Polished literary prose (`manuscript/`).
 
 When an author modifies a premise in `synopsis.md`, adds research facts, adjusts character motivations, or edits a scene beat, `novel-sync` isolates the delta for that specific input and propagates changes downstream:
 
 ```mermaid
 flowchart LR
     A["story/synopsis.md\nstory/brief.md"] -->|Novel-Sync: brief| B["kb/research/ (RQ)\nkb/facts/ (FCT)"]
-    B -->|Novel-Sync: research| C["kb/ (Story Bible)\nCHR, PLC, PLT, WLD"]
+    B -->|Novel-Sync: research| C["kb/ (Story Bible)\nCHR, PLC, PLT, GFX"]
     C -->|Novel-Sync: bible| D["outline/outline.md\n(PRT, CHP, SCN)"]
+    D -->|Novel-Sync: graphics| G["graphics/\n(Rendered Assets)"]
     D -->|Novel-Sync: outline| E["abridged/\n(Abridged Draft)"]
+    G -.->|Embed| E
+    G -.->|Embed| F
     E -->|Novel-Sync: abridged| F["manuscript/\n(Final Novel)"]
 ```
 
 1. **Input Delta Isolation (`specnovel.py delta --stage <stage>`)**:
    Isolates changes in any specific input layer. For example, `delta --stage brief` isolates premise/synopsis changes without conflating them with unoutlined research facts.
-2. **Impact Detection**: `specnovel.py impact --stage abridged` analyzes the dependency graph between the
+2. **Story DAG Pruning & Per-Asset Graphics Tracking (`specnovel.py impact --stage graphics`)**:
+   To conserve AI tokens, only graphic entities (`GFX`) referenced in the Story DAG (active in scenes or prerequisites) are rendered. Inactive assets are skipped (0 tokens used). Sync status is tracked per-asset via `Novel-GFX-Sync: GFX-NNN` trailers, so when an asset is newly re-referenced in the DAG, the engine immediately reports how far out of sync it is and which upstream dependencies changed.
+3. **Impact Detection**: `specnovel.py impact --stage abridged` analyzes the dependency graph between the
    baseline commit and the working tree, identifying only the specific scenes impacted by changed IDs.
-3. **Sequential Reconciliation**:
-   - `abridged/` is updated first for impacted scenes.
-   - Author reviews and approves the abridged changes.
+4. **Sequential Reconciliation**:
+   - `graphics/` renders active maps, diagrams, portraits, and charts.
+   - `abridged/` is updated for impacted scenes with embedded graphics.
+   - Author reviews and approves intermediate changes.
    - `manuscript/` is re-rendered for impacted scenes using `story/style.md` and active editorial directives (`EDT`).
-4. **Automated Verification**: `specnovel.py check` validates that all scenes exist in outline order, references
-   resolve, and no tags leak into prose.
-5. **Git Baselines**: The agent records synchronization using Git commit trailers:
+5. **Automated Verification**: `specnovel.py check` validates that all scenes exist in outline order, references
+   resolve, active graphics exist on disk, and no tags leak into prose.
+6. **Git Baselines**: The agent records synchronization using Git commit trailers:
    ```git
    novel-sync(brief): Update synopsis premise to include third-act train sabotage
 
    Novel-Sync: brief
    Novel-Brief-Modified: story/synopsis.md
+   ```
+   Or for graphical assets:
+   ```git
+   novel-sync(graphics): Render harbor map
+
+   Novel-Sync: graphics
+   Novel-GFX-Sync: GFX-001
    ```
    Or for derived layers:
    ```git

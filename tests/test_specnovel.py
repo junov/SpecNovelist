@@ -491,6 +491,113 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
         self.assertEqual(code, 0)
         self.assertEqual(len(brief_delta_after["changes"]), 0)
 
+    def test_graphics_stage_and_per_asset_sync_tracking(self):
+        # 1. Scaffolding check: graphics/ and kb/graphics/ exist
+        self.assertTrue((self.root / "graphics").is_dir())
+        self.assertTrue((self.root / "kb/graphics").is_dir())
+
+        # 2. Define two graphical assets in kb/graphics/
+        gfx1_content = """\
+# GFX-001: Hamburg Harbor Map
+- **Type:** map
+- **Target:** graphics/map.png
+- **Prerequisites:** [[PLC-001]]
+- **Embed:** [[SCN-001]]
+"""
+        gfx2_content = """\
+# GFX-002: Elena Portrait
+- **Type:** portrait
+- **Target:** graphics/portrait.png
+- **Prerequisites:** [[CHR-001]]
+"""
+        self.write("kb/graphics/GFX-001-map.md", gfx1_content)
+        self.write("kb/graphics/GFX-002-portrait.md", gfx2_content)
+
+        # 3. Reference GFX-001 in SCN-001 in outline. GFX-002 is left unreferenced.
+        current_outline = (self.root / "outline/outline.md").read_text(encoding="utf-8")
+        updated_outline = current_outline.replace(
+            "#### SCN-001: Elena receives the letter\n",
+            "#### SCN-001: Elena receives the letter\n- **Graphics:** [[GFX-001]]\n"
+        )
+        self.write("outline/outline.md", updated_outline)
+
+        # Establish plan baseline first
+        code, _ = self.run_cli("accept", "--stage", "plan", "-m", "Baseline with GFX definitions")
+        self.assertEqual(code, 0)
+
+        # 4. Check impact on graphics stage
+        code, imp = self.json_cli("impact", "--stage", "graphics")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(imp["active"]), 1)
+        self.assertEqual(imp["active"][0]["id"], "GFX-001")
+        self.assertEqual(imp["active"][0]["status"], "NEEDS_RENDERING")
+        self.assertIn("rendered file missing on disk (graphics/map.png)", imp["active"][0]["reasons"])
+
+        # GFX-002 is inactive (token saver!)
+        self.assertEqual(len(imp["inactive"]), 1)
+        self.assertEqual(imp["inactive"][0]["id"], "GFX-002")
+        self.assertEqual(imp["inactive"][0]["status"], "INACTIVE")
+        self.assertIn("skipped (not in Story DAG - 0 tokens used", imp["inactive"][0]["reason"])
+        self.assertEqual(imp["token_savings_count"], 1)
+
+        # 5. Render GFX-001 (create fake rendered image file)
+        self.write("graphics/map.png", "dummy-png-data")
+
+        # 6. Accept graphics stage
+        code, out = self.run_cli("accept", "--stage", "graphics", "-m", "Render harbor map")
+        self.assertEqual(code, 0)
+
+        # Verify git commit trailer Novel-GFX-Sync includes GFX-001 but NOT GFX-002
+        log_out = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=self.root, capture_output=True, text=True, check=True).stdout
+        self.assertIn("Novel-Sync: graphics", log_out)
+        gfx_sync_line = [line for line in log_out.splitlines() if line.startswith("Novel-GFX-Sync:")][0]
+        self.assertIn("GFX-001", gfx_sync_line)
+        self.assertNotIn("GFX-002", gfx_sync_line)
+
+        # Verify GFX-001 is now UP_TO_DATE
+        code, imp_after = self.json_cli("impact", "--stage", "graphics")
+        self.assertEqual(code, 0)
+        self.assertEqual(imp_after["active"][0]["status"], "UP_TO_DATE")
+        self.assertEqual(imp_after["needs_update_count"], 0)
+
+        # 7. Modify prerequisite PLC-001 and advance bible baseline
+        current_plc = (self.root / "kb/places/PLC-001-harbor.md").read_text(encoding="utf-8")
+        self.write("kb/places/PLC-001-harbor.md", current_plc + "\n- **Piers:** Expanded in 1912\n")
+        self.run_cli("accept", "--stage", "bible", "-m", "Update harbor piers")
+
+        # 8. Check how far out of sync GFX-001 is
+        code, imp_oos = self.json_cli("impact", "--stage", "graphics")
+        self.assertEqual(code, 0)
+        gfx1_stat = imp_oos["active"][0]
+        self.assertEqual(gfx1_stat["status"], "OUT_OF_SYNC")
+        self.assertEqual(gfx1_stat["commits_behind"], 1)
+        self.assertIn("referenced [[PLC-001]] modified", gfx1_stat["reasons"])
+
+        # 9. Newly reference GFX-002 in SCN-002 in outline
+        outline_with_gfx2 = (self.root / "outline/outline.md").read_text(encoding="utf-8").replace(
+            "#### SCN-002: Karl refuses\n",
+            "#### SCN-002: Karl refuses\n- **Graphics:** [[GFX-002]]\n"
+        )
+        self.write("outline/outline.md", outline_with_gfx2)
+        self.run_cli("accept", "--stage", "outline", "-m", "Add GFX-002 to SCN-002")
+
+        # GFX-002 is now active in Story DAG and reports out-of-sync status
+        code, imp_newly_active = self.json_cli("impact", "--stage", "graphics")
+        self.assertEqual(code, 0)
+        active_ids = {a["id"]: a for a in imp_newly_active["active"]}
+        self.assertIn("GFX-002", active_ids)
+        self.assertEqual(active_ids["GFX-002"]["status"], "NEEDS_RENDERING")
+        self.assertIn("no sync baseline (never rendered)", active_ids["GFX-002"]["reasons"])
+        self.assertIn("rendered file missing on disk (graphics/portrait.png)", active_ids["GFX-002"]["reasons"])
+
+        # 10. Accept specifically GFX-002 using --asset
+        self.write("graphics/portrait.png", "dummy-portrait-data")
+        code, _ = self.run_cli("accept", "--stage", "graphics", "--asset", "GFX-002", "-m", "Render portrait")
+        self.assertEqual(code, 0)
+
+        log_out2 = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=self.root, capture_output=True, text=True, check=True).stdout
+        self.assertIn("Novel-GFX-Sync: GFX-002", log_out2)
+
 
 if __name__ == "__main__":
     unittest.main()

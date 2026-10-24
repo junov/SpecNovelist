@@ -87,38 +87,41 @@ class PlaceholderItem:
     tracked_by: Optional[str] = None
 
 TRAILER = "Novel-Sync"
-STORY, KB, OUTLINE, ABRIDGED, MANUSCRIPT, BUILD = "story", "kb", "outline", "abridged", "manuscript", "build"
+STORY, KB, OUTLINE, GRAPHICS, ABRIDGED, MANUSCRIPT, BUILD = "story", "kb", "outline", "graphics", "abridged", "manuscript", "build"
 PLAN_DIRS = (STORY, KB, OUTLINE)
-ALL_DIRS = (STORY, KB, OUTLINE, ABRIDGED, MANUSCRIPT)
+ALL_DIRS = (STORY, KB, OUTLINE, GRAPHICS, ABRIDGED, MANUSCRIPT)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 SYNOPSIS_FILE, BRIEF_FILE, STYLE_FILE = "story/synopsis.md", "story/brief.md", "story/style.md"
 MIN_STYLE_WORDS = 400
 
 SPEC_STAGES = ("brief", "research", "bible", "outline")
+ASSET_STAGES = ("graphics",)
 DERIVED_STAGES = ("abridged", "manuscript")
-STAGES = SPEC_STAGES + DERIVED_STAGES
+STAGES = SPEC_STAGES + ASSET_STAGES + DERIVED_STAGES
 STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
     "brief": (SYNOPSIS_FILE, BRIEF_FILE),
     "research": ("kb/research", "kb/sources", "kb/facts"),
     "bible": ("kb/characters", "kb/places", "kb/organizations", "kb/objects",
               "kb/plot", "kb/themes", "kb/world", "kb/timeline"),
     "outline": (OUTLINE,),
+    "graphics": (GRAPHICS, "kb/graphics"),
     "abridged": (ABRIDGED,),
     "manuscript": (MANUSCRIPT, STYLE_FILE, "story/editorial"),
 }
 GENERATED = {"kb/INDEX.md"}
 KB_FOLDERS = ("characters", "places", "organizations", "objects", "plot", "themes", "world",
-              "timeline", "facts", "sources", "research")
+              "timeline", "facts", "sources", "research", "graphics")
 
 TYPES: "OrderedDict[str, str]" = OrderedDict([
     ("CHR", "character"), ("PLC", "place"), ("ORG", "organization"), ("OBJ", "object"),
     ("PLT", "plot element"), ("THM", "theme"), ("WLD", "world rule"), ("TML", "timeline event"),
     ("FCT", "fact"), ("SRC", "source"), ("RQ", "research question"), ("STY", "style rule"),
+    ("GFX", "graphic"),
     ("EDT", "editorial directive"),
     ("PRT", "part"), ("CHP", "chapter"), ("SCN", "scene"),
 ])
 # KB item types that are expected to be referenced from the outline (unused ones are reported).
-STORY_TYPES = {"CHR", "PLC", "ORG", "OBJ", "PLT", "THM", "WLD", "TML", "FCT"}
+STORY_TYPES = {"CHR", "PLC", "ORG", "OBJ", "PLT", "THM", "WLD", "TML", "FCT", "GFX"}
 
 
 class NovelError(Exception):
@@ -158,7 +161,7 @@ class Git:
             return None
         if stage in SPEC_STAGES:
             pattern = rf"({re.escape(stage)}|plan|all)"
-        elif stage in DERIVED_STAGES:
+        elif stage in DERIVED_STAGES or stage in ASSET_STAGES:
             pattern = rf"({re.escape(stage)}|all)"
         elif stage == "plan":
             pattern = r"(plan|all)"
@@ -169,6 +172,22 @@ class Git:
         out = self.lines("log", "-1", "--format=%H", "--extended-regexp",
                          f"--grep=^{TRAILER}:.*{pattern}", "HEAD")
         return out[0].strip() if out else None
+
+    def gfx_baseline(self, gfx_id: str) -> Optional[str]:
+        """Most recent commit reachable from HEAD with Novel-GFX-Sync trailer containing ``gfx_id``."""
+        if not self.has_commits():
+            return None
+        pattern = rf"\b{re.escape(gfx_id)}\b"
+        out = self.lines("log", "-1", "--format=%H", "--extended-regexp",
+                         f"--grep=^Novel-GFX-Sync:.*{pattern}", "HEAD")
+        return out[0].strip() if out else None
+
+    def commits_behind(self, sha: Optional[str]) -> int:
+        """Number of commits between sha and HEAD."""
+        if not sha or not self.has_commits():
+            return 0
+        out = self.run("rev-list", "--count", f"{sha}..HEAD", allow_fail=True)
+        return int(out.strip()) if out and out.strip().isdigit() else 0
 
     def commit_info(self, sha: Optional[str]) -> Optional[dict]:
         if not sha:
@@ -568,8 +587,10 @@ def build_story_dag(p: Project) -> StoryDAG:
         if sec.id in dag.positions:
             dag.nodes.add(sec.id)
 
-    # Any element in the plan that explicitly declares prerequisites or is referenced as a prerequisite
+    # Any story element in the plan that explicitly declares prerequisites or is referenced as a prerequisite
     for sec in plan.defs.values():
+        if sec.prefix not in ("SCN", "CHP", "PRT", "PLT"):
+            continue
         prereqs = sec.prereq_ids()
         if prereqs:
             dag.nodes.add(sec.id)
@@ -897,6 +918,20 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     if open_edts:
         infos.append(f"{len(open_edts)} open editorial directive(s): " + ", ".join(s.id for s in open_edts))
 
+    # graphics integrity
+    dag = build_story_dag(p)
+    for s in plan.of_type("GFX"):
+        gtype = (s.field_value("type") or "").strip().lower()
+        if not gtype:
+            warnings.append(f"graphic {s.id} has no 'Type:' field (e.g. map, diagram, cover, illustration) ({s.location})")
+        target_path = (s.field_value("target", "file", "path") or "").strip()
+        if not target_path:
+            warnings.append(f"graphic {s.id} has no 'Target:' file path (defaults to graphics/{s.id}.png) ({s.location})")
+        if s.id in dag.positions or s.id in dag.nodes:
+            rel_file = target_path or f"graphics/{s.id}.png"
+            if not (root / rel_file).is_file():
+                warnings.append(f"active graphic {s.id} ({s.title}) in Story DAG has missing rendered file '{rel_file}'")
+
     # usage
     outline_refs: Set[str] = set()
     for s in plan.sections():
@@ -1005,6 +1040,111 @@ def diff_models(old: Model, new: Model) -> List[Change]:
                 changes.append(Change("REMOVED", b, b.lines, [], b.file))
     changes.sort(key=lambda ch: (ch.id is None, KIND_ORDER[ch.kind], ch.section.file, ch.section.line))
     return changes
+
+
+def compute_graphics_impact(p: Project) -> dict:
+    git, plan, o = p.git, p.plan, p.outline
+    dag = build_story_dag(p)
+    gfx_items = plan.of_type("GFX")
+
+    active_items = []
+    inactive_items = []
+
+    for gfx in gfx_items:
+        gid = gfx.id
+        is_active = (gid in dag.positions) or (gid in dag.nodes)
+        embed_target = gfx.field_value("embed", "placement", "scene", "target_scene")
+        if embed_target:
+            for s_ref in gfx.ref_ids():
+                if s_ref in o.scenes:
+                    is_active = True
+                    break
+
+        target_path = (gfx.field_value("target", "file", "path") or f"graphics/{gid}.png").strip()
+        gtype = (gfx.field_value("type") or "image").strip()
+        asset_base = git.gfx_baseline(gid)
+        commits_behind = git.commits_behind(asset_base) if asset_base else None
+
+        rendered_file_exists = (git.root / target_path).is_file()
+
+        reasons: List[str] = []
+        upstream_changes: List[str] = []
+
+        if not is_active:
+            status = "INACTIVE"
+            if asset_base:
+                desc = f"skipped (not in Story DAG - 0 tokens used; last synced {commits_behind} commits ago)"
+            else:
+                desc = "skipped (not in Story DAG - 0 tokens used; never rendered)"
+            inactive_items.append({
+                "id": gid,
+                "title": gfx.title,
+                "type": gtype,
+                "target": target_path,
+                "status": status,
+                "active": False,
+                "baseline": git.commit_info(asset_base),
+                "commits_behind": commits_behind,
+                "reason": desc,
+            })
+            continue
+
+        if not rendered_file_exists:
+            reasons.append(f"rendered file missing on disk ({target_path})")
+
+        if not asset_base:
+            reasons.append("no sync baseline (never rendered)")
+        else:
+            old_plan_md = git.commit_md(asset_base, "kb/graphics")
+            old_model = build_model(old_plan_md)
+            if gid not in old_model.defs:
+                upstream_changes.append("GFX definition added after baseline")
+            else:
+                old_sec = old_model.defs[gid]
+                if old_sec.lines != gfx.lines:
+                    upstream_changes.append("GFX definition modified")
+
+            dep_ids = (gfx.ref_ids() | gfx.prereq_ids()) - {gid}
+            if dep_ids:
+                old_all_md = git.commit_md(asset_base, *PLAN_DIRS)
+                old_all = build_model(old_all_md)
+                for did in sorted(dep_ids):
+                    if did not in old_all.defs:
+                        upstream_changes.append(f"referenced [[{did}]] added")
+                    elif did in plan.defs and old_all.defs[did].lines != plan.defs[did].lines:
+                        upstream_changes.append(f"referenced [[{did}]] modified")
+
+            if upstream_changes:
+                reasons.extend(upstream_changes)
+
+        if not rendered_file_exists or not asset_base:
+            status = "NEEDS_RENDERING"
+        elif upstream_changes:
+            status = "OUT_OF_SYNC"
+        else:
+            status = "UP_TO_DATE"
+
+        active_items.append({
+            "id": gid,
+            "title": gfx.title,
+            "type": gtype,
+            "target": target_path,
+            "status": status,
+            "active": True,
+            "baseline": git.commit_info(asset_base),
+            "commits_behind": commits_behind,
+            "reasons": reasons,
+            "upstream_changes": upstream_changes,
+        })
+
+    needs_update_count = sum(1 for it in active_items if it["status"] != "UP_TO_DATE")
+    return {
+        "stage": "graphics",
+        "active": active_items,
+        "inactive": inactive_items,
+        "needs_update_count": needs_update_count,
+        "token_savings_count": len(inactive_items),
+    }
 
 
 def compute_impact(p: Project, stage: str) -> dict:
@@ -1145,7 +1285,7 @@ def cmd_init(root: Path, args) -> int:
                     print(f"created  {rel.as_posix()}")
     else:
         print(f"warning: templates not found at {templates}", file=sys.stderr)
-    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + ["story/editorial", OUTLINE, ABRIDGED, MANUSCRIPT]:
+    for d in [f"{KB}/{k}" for k in KB_FOLDERS] + ["story/editorial", GRAPHICS, OUTLINE, ABRIDGED, MANUSCRIPT]:
         p = git.root / d
         if not p.exists():
             p.mkdir(parents=True)
@@ -1164,6 +1304,7 @@ def cmd_status(git: Git, args) -> int:
     errors, warnings, infos = run_checks(p)
     counts = OrderedDict((pre, len(p.plan.of_type(pre))) for pre in TYPES)
     impacts = {st: compute_impact(p, st) for st in LAYERS}
+    gfx_impact = compute_graphics_impact(p)
     drift = {st: git.changed_since(git.baseline(st), *STAGE_DIRS.get(st, (st,))) for st in STAGES}
     words = {st: sum(word_count(s.body) for s in p.layers[st].scenes.values()) for st in LAYERS}
     placeholders = scan_placeholders(p)
@@ -1174,9 +1315,11 @@ def cmd_status(git: Git, args) -> int:
                    "catalog": counts, "scenes": {"outline": len(p.outline.scenes),
                                                  **{st: len(p.layers[st].scenes) for st in LAYERS}},
                    "words": words, "pending": {st: len(impacts[st]["scenes"]) + len(impacts[st]["remove"]) for st in LAYERS},
+                   "graphics": {"active": len(gfx_impact["active"]), "pending": gfx_impact["needs_update_count"],
+                                "inactive": len(gfx_impact["inactive"])},
                    "placeholders": {"total": len(placeholders), "untracked": len(untracked_pl)},
                    "drift": drift, "errors": errors, "warnings": warnings, "infos": infos,
-                   "next": next_step(p, impacts, errors)})
+                   "next": next_step(p, impacts, gfx_impact, errors)})
         return 0
     out = [f"# SpecNovelist status: {project_title(git)}", ""]
     out += [baseline_line(st, git.commit_info(git.baseline(st))) for st in STAGES]
@@ -1187,6 +1330,8 @@ def cmd_status(git: Git, args) -> int:
     total = len(p.outline.scenes)
     out += ["", f"Scenes: outline {total} | abridged {len(p.layers['abridged'].scenes)} ({words['abridged']:,} words)"
                 f" | manuscript {len(p.layers['manuscript'].scenes)} ({words['manuscript']:,} words)"]
+    if gfx_impact["needs_update_count"]:
+        out.append(f"Pending graphics: {gfx_impact['needs_update_count']} active asset(s) to render - run 'impact --stage graphics'")
     for st in LAYERS:
         imp = impacts[st]
         n = len(imp["scenes"]) + len(imp["remove"])
@@ -1199,12 +1344,12 @@ def cmd_status(git: Git, args) -> int:
     if untracked_pl:
         out += ["", f"Placeholders: {len(untracked_pl)} untracked placeholder(s) - run 'specnovel.py placeholders --create-rq'"]
     out += ["", f"Check: {len(errors)} error(s), {len(warnings)} warning(s) - run 'check' for details",
-            f"Next: {next_step(p, impacts, errors)}"]
+            f"Next: {next_step(p, impacts, gfx_impact, errors)}"]
     print("\n".join(out))
     return 0
 
 
-def next_step(p: Project, impacts: dict, errors: List[str]) -> str:
+def next_step(p: Project, impacts: dict, gfx_impact: dict, errors: List[str]) -> str:
     root = p.git.root
     syn = root / SYNOPSIS_FILE
     if not syn.is_file() or word_count(syn.read_text(encoding="utf-8").splitlines()) < 30:
@@ -1232,14 +1377,8 @@ def next_step(p: Project, impacts: dict, errors: List[str]) -> str:
         return "novel-outline: build the outline"
     if not p.git.baseline("outline"):
         return "review the outline and run 'accept --stage outline'"
-    if impacts["abridged"]["scenes"] or impacts["abridged"]["remove"]:
-        return "novel-abridge (or novel-sync): update the abridged draft"
-    if impacts["manuscript"]["scenes"] or impacts["manuscript"]["remove"]:
-        style = root / STYLE_FILE
-        if not style.is_file() or word_count(style.read_text(encoding="utf-8").splitlines()) < MIN_STYLE_WORDS:
-            return "complete story/style.md before writing the manuscript"
-        return "novel-write (or novel-sync): render the manuscript"
-    return "novel-verify: audit continuity, facts and style; then 'compile'"
+    if gfx_impact["needs_update_count"] > 0:
+        return "render pending graphics with 'specnovel.py impact --stage graphics' and accept --stage graphics"
     if impacts["abridged"]["scenes"] or impacts["abridged"]["remove"]:
         return "novel-abridge (or novel-sync): update the abridged draft"
     if impacts["manuscript"]["scenes"] or impacts["manuscript"]["remove"]:
@@ -1474,6 +1613,45 @@ def cmd_delta(git: Git, args) -> int:
 
 def cmd_impact(git: Git, args) -> int:
     p = load_project(git)
+    if args.stage == "graphics":
+        imp = compute_graphics_impact(p)
+        if args.json:
+            emit_json(imp)
+            return 0
+        out = ["# Impact on graphics/", ""]
+        active = imp["active"]
+        inactive = imp["inactive"]
+        if not active and not inactive:
+            out.append("No graphical assets defined in kb/graphics/.")
+            print("\n".join(out))
+            return 0
+        out.append(f"Active assets in Story DAG: {len(active)} ({imp['needs_update_count']} need generation/update)")
+        out.append(f"Inactive assets (skipped - token savings): {len(inactive)}")
+        out.append("")
+        if active:
+            out.append("Active Assets:")
+            for a in active:
+                behind = f" ({a['commits_behind']} commits behind)" if a['commits_behind'] is not None else ""
+                base_str = a['baseline']['short'] if a['baseline'] else "none"
+                out.append(f"  [{a['status']}] {a['id']}: {a['title']}{behind}")
+                out.append(f"      Type: {a['type']} | Target: {a['target']} | Baseline: {base_str}")
+                if a["reasons"]:
+                    for r in a["reasons"]:
+                        out.append(f"      - {r}")
+            out.append("")
+        if inactive:
+            out.append("Inactive Assets (Skipped to save AI tokens):")
+            for a in inactive:
+                out.append(f"  [{a['status']}] {a['id']}: {a['title']}")
+                out.append(f"      {a['reason']}")
+            out.append("")
+        if imp["needs_update_count"] == 0:
+            out.append("All active graphical assets in Story DAG are up to date.")
+        else:
+            out.append(f"{imp['needs_update_count']} active asset(s) need rendering. Run novel-sync with --stage graphics to accept.")
+        print("\n".join(out))
+        return 0
+
     imp = compute_impact(p, args.stage)
     if args.json:
         emit_json(imp)
@@ -1530,7 +1708,7 @@ def cmd_accept(git: Git, args) -> int:
             dirs_to_stage.update(PLAN_DIRS)
 
     for st in stages:
-        if st in ("plan", "bible", "research", "outline"):
+        if st in ("plan", "bible", "research", "outline", "graphics"):
             scope = STAGE_DIRS.get(st, PLAN_DIRS)
             base = git.baseline(st)
             changes = diff_models(build_model(git.commit_md(base, *scope)), build_model(git.working_md(*scope)))
@@ -1539,6 +1717,14 @@ def cmd_accept(git: Git, args) -> int:
                 if ids:
                     prefix = f"Novel-{st.capitalize()}-" if st != "plan" else "Novel-"
                     trailers.append(f"{prefix}{kind.capitalize()}: {', '.join(ids)}")
+            if st == "graphics":
+                gfx_imp = compute_graphics_impact(p)
+                if getattr(args, "asset", None):
+                    sync_ids = [gid for gid in args.asset if gid in p.plan.defs]
+                else:
+                    sync_ids = [item["id"] for item in gfx_imp["active"]]
+                if sync_ids:
+                    trailers.append(f"Novel-GFX-Sync: {', '.join(sync_ids)}")
         elif st == "brief":
             base = git.baseline("brief")
             scope = STAGE_DIRS["brief"]
@@ -1679,7 +1865,7 @@ def cmd_log(git: Git, args) -> int:
     if not git.has_commits():
         print("No commits yet.")
         return 0
-    keys = ",".join(f"key={k}" for k in (TRAILER, "Novel-Added", "Novel-Modified", "Novel-Removed",
+    keys = ",".join(f"key={k}" for k in (TRAILER, "Novel-GFX-Sync", "Novel-Added", "Novel-Modified", "Novel-Removed",
                                          "Novel-Abridged-Updated", "Novel-Abridged-Removed",
                                          "Novel-Manuscript-Updated", "Novel-Manuscript-Removed"))
     out = git.lines("log", "--extended-regexp", f"--grep=^{TRAILER}:", f"--format=%h %cs %s%n%(trailers:{keys})", "HEAD")
@@ -1907,7 +2093,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if name == "delta":
             p.add_argument("--stage", choices=list(STAGES) + ["plan", "all"], default="plan", help="baseline to compare against")
         if name == "impact":
-            p.add_argument("--stage", choices=list(LAYERS), required=True)
+            p.add_argument("--stage", choices=list(LAYERS) + ["graphics"], required=True)
         if name == "feedback":
             p.add_argument("id", nargs="?", help="optional target scene/chapter ID (e.g. SCN-014) or EDT-xxx ID")
             p.add_argument("--status", choices=["open", "applied", "superseded", "wontfix", "all"], default="open",
@@ -1916,6 +2102,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                            help="filter by target stage")
         if name == "accept":
             p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["plan", "all"])
+            p.add_argument("--asset", action="append", help="specific asset ID(s) to accept (e.g. GFX-001)")
             p.add_argument("-m", "--message", default="", help="short summary for the commit subject")
             p.add_argument("--force", action="store_true", help="accept even if 'check' reports errors")
         if name == "stats":
