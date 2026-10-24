@@ -450,6 +450,47 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
         code, res = self.json_cli("check")
         self.assertTrue(any("unresolved placeholder '[Protagonist]'" in w for w in res["warnings"]))
 
+    def test_parallel_sync_baselines_and_brief_delta(self):
+        # 1. Accept initial plan baseline (establishes baseline for all spec stages: brief, research, bible, outline)
+        code, out = self.run_cli("accept", "--stage", "plan", "-m", "Initial baseline")
+        self.assertEqual(code, 0)
+        self.assertIn("Accepted", out)
+
+        # Verify status reports all spec baselines
+        code, status_res = self.json_cli("status")
+        self.assertEqual(code, 0)
+        self.assertIsNotNone(status_res["baselines"]["brief"])
+        self.assertIsNotNone(status_res["baselines"]["bible"])
+
+        # 2. Modify story/synopsis.md
+        current_synopsis = (self.root / "story/synopsis.md").read_text(encoding="utf-8")
+        self.write("story/synopsis.md", current_synopsis + "\n\nNew premise turning point.\n")
+
+        # 3. Check delta --stage brief isolates the synopsis change
+        code, brief_delta = self.json_cli("delta", "--stage", "brief")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(brief_delta["changes"]), 1)
+        self.assertEqual(brief_delta["changes"][0]["file"], "story/synopsis.md")
+
+        # 4. Check delta --stage bible shows NO changes because bible files were not touched
+        code, bible_delta = self.json_cli("delta", "--stage", "bible")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(bible_delta["changes"]), 0)
+
+        # 5. Accept updated brief baseline with Git trailer verification
+        code, out = self.run_cli("accept", "--stage", "brief", "-m", "Update premise")
+        self.assertEqual(code, 0)
+
+        # Check commit trailers in git log
+        log_out = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=self.root, capture_output=True, text=True, check=True).stdout
+        self.assertIn("Novel-Sync: brief", log_out)
+        self.assertIn("Novel-Brief-Modified: story/synopsis.md", log_out)
+
+        # 6. Subsequent delta --stage brief is now clean
+        code, brief_delta_after = self.json_cli("delta", "--stage", "brief")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(brief_delta_after["changes"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

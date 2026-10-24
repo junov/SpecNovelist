@@ -26,6 +26,21 @@ outline, `novel-sync` calculates the exact impact radius, reconciles `abridged/`
 
 ---
 
+## The Parallel Synchronization Baselines
+
+SpecNovelist operates with **six decoupled, parallel sync stages**, each tracked via Git commit trailers (`Novel-Sync: <stage>`):
+
+1. **`brief`**: Inception & premise decisions (`story/synopsis.md`, `story/brief.md`).
+2. **`research`**: Empirical grounding (`kb/research/`, `kb/sources/`, `kb/facts/`).
+3. **`bible`**: Story bible canon (`kb/characters/`, `kb/places/`, `kb/plot/`, `kb/world/`, `kb/timeline/`, etc.).
+4. **`outline`**: Structural skeleton in reading order (`outline/outline.md`).
+5. **`abridged`**: Condensed intermediate novel (`abridged/`).
+6. **`manuscript`**: Polished literary prose (`manuscript/`, `story/style.md`, `story/editorial/`).
+
+Whenever the author updates `story/synopsis.md` or `story/brief.md` during the novel's lifecycle (decoupled from `novel-init`), `specnovel.py delta --stage brief` isolates the exact changes, allowing `novel-sync` to propagate changes cleanly downstream through `research`, `bible`, `outline`, and the drafts.
+
+---
+
 ## The Synchronization Lifecycle
 
 ```mermaid

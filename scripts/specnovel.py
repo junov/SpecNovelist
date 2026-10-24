@@ -91,10 +91,22 @@ STORY, KB, OUTLINE, ABRIDGED, MANUSCRIPT, BUILD = "story", "kb", "outline", "abr
 PLAN_DIRS = (STORY, KB, OUTLINE)
 ALL_DIRS = (STORY, KB, OUTLINE, ABRIDGED, MANUSCRIPT)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
-STAGES = ("plan", "abridged", "manuscript")
-GENERATED = {"kb/INDEX.md"}
 SYNOPSIS_FILE, BRIEF_FILE, STYLE_FILE = "story/synopsis.md", "story/brief.md", "story/style.md"
 MIN_STYLE_WORDS = 400
+
+SPEC_STAGES = ("brief", "research", "bible", "outline")
+DERIVED_STAGES = ("abridged", "manuscript")
+STAGES = SPEC_STAGES + DERIVED_STAGES
+STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
+    "brief": (SYNOPSIS_FILE, BRIEF_FILE),
+    "research": ("kb/research", "kb/sources", "kb/facts"),
+    "bible": ("kb/characters", "kb/places", "kb/organizations", "kb/objects",
+              "kb/plot", "kb/themes", "kb/world", "kb/timeline"),
+    "outline": (OUTLINE,),
+    "abridged": (ABRIDGED,),
+    "manuscript": (MANUSCRIPT, STYLE_FILE, "story/editorial"),
+}
+GENERATED = {"kb/INDEX.md"}
 KB_FOLDERS = ("characters", "places", "organizations", "objects", "plot", "themes", "world",
               "timeline", "facts", "sources", "research")
 
@@ -144,8 +156,18 @@ class Git:
         """Most recent commit reachable from HEAD whose Novel-Sync trailer lists ``stage``."""
         if not self.has_commits():
             return None
+        if stage in SPEC_STAGES:
+            pattern = rf"({re.escape(stage)}|plan|all)"
+        elif stage in DERIVED_STAGES:
+            pattern = rf"({re.escape(stage)}|all)"
+        elif stage == "plan":
+            pattern = r"(plan|all)"
+        elif stage == "all":
+            pattern = r"all"
+        else:
+            pattern = re.escape(stage)
         out = self.lines("log", "-1", "--format=%H", "--extended-regexp",
-                         f"--grep=^{TRAILER}:.*{stage}", "HEAD")
+                         f"--grep=^{TRAILER}:.*{pattern}", "HEAD")
         return out[0].strip() if out else None
 
     def commit_info(self, sha: Optional[str]) -> Optional[dict]:
@@ -1142,7 +1164,7 @@ def cmd_status(git: Git, args) -> int:
     errors, warnings, infos = run_checks(p)
     counts = OrderedDict((pre, len(p.plan.of_type(pre))) for pre in TYPES)
     impacts = {st: compute_impact(p, st) for st in LAYERS}
-    drift = {st: git.changed_since(git.baseline(st), LAYERS[st]) for st in LAYERS}
+    drift = {st: git.changed_since(git.baseline(st), *STAGE_DIRS.get(st, (st,))) for st in STAGES}
     words = {st: sum(word_count(s.body) for s in p.layers[st].scenes.values()) for st in LAYERS}
     placeholders = scan_placeholders(p)
     untracked_pl = [pl for pl in placeholders if pl.tracked_by is None]
@@ -1170,9 +1192,10 @@ def cmd_status(git: Git, args) -> int:
         n = len(imp["scenes"]) + len(imp["remove"])
         out.append(f"Pending {st}: {n} scene(s) to (re)generate or remove"
                    + (f", {len(imp['global'])} global note(s)" if imp["global"] else "") + f" - run 'impact --stage {st}'")
+    for st in STAGES:
         if drift[st] and git.baseline(st):
-            out.append(f"  {len(drift[st])} file(s) in {LAYERS[st]}/ changed since the {st} baseline "
-                       f"(expected mid-sync; otherwise hand edits - see novel-verify drift triage)")
+            out.append(f"  {len(drift[st])} file(s) in {st} changed since the {st} baseline "
+                       f"(see 'specnovel delta --stage {st}')")
     if untracked_pl:
         out += ["", f"Placeholders: {len(untracked_pl)} untracked placeholder(s) - run 'specnovel.py placeholders --create-rq'"]
     out += ["", f"Check: {len(errors)} error(s), {len(warnings)} warning(s) - run 'check' for details",
@@ -1193,16 +1216,30 @@ def next_step(p: Project, impacts: dict, errors: List[str]) -> str:
     pl_untracked = [pl for pl in scan_placeholders(p) if pl.tracked_by is None]
     if pl_untracked and not p.plan.of_type("RQ"):
         return "run 'specnovel.py placeholders --create-rq' to generate research questions from placeholders"
+    if not p.git.baseline("brief"):
+        return "review the brief and run 'accept --stage brief'"
     high = [s.id for s in p.plan.of_type("RQ")
             if re.search(r"status\**\s*:\**\s*open", s.text, re.I) and re.search(r"priority\**\s*:\**\s*high", s.text, re.I)]
     if high:
         return "novel-research: answer high-priority research questions " + ", ".join(high[:5])
+    if not p.git.baseline("research"):
+        return "review research and run 'accept --stage research'"
+    if not p.git.baseline("bible"):
+        return "review story bible and run 'accept --stage bible'"
     if pl_untracked:
         return "run 'specnovel.py placeholders --create-rq' to track remaining placeholders"
     if not p.outline.scenes:
         return "novel-outline: build the outline"
-    if not p.git.baseline("plan"):
-        return "review the plan and run 'accept --stage plan'"
+    if not p.git.baseline("outline"):
+        return "review the outline and run 'accept --stage outline'"
+    if impacts["abridged"]["scenes"] or impacts["abridged"]["remove"]:
+        return "novel-abridge (or novel-sync): update the abridged draft"
+    if impacts["manuscript"]["scenes"] or impacts["manuscript"]["remove"]:
+        style = root / STYLE_FILE
+        if not style.is_file() or word_count(style.read_text(encoding="utf-8").splitlines()) < MIN_STYLE_WORDS:
+            return "complete story/style.md before writing the manuscript"
+        return "novel-write (or novel-sync): render the manuscript"
+    return "novel-verify: audit continuity, facts and style; then 'compile'"
     if impacts["abridged"]["scenes"] or impacts["abridged"]["remove"]:
         return "novel-abridge (or novel-sync): update the abridged draft"
     if impacts["manuscript"]["scenes"] or impacts["manuscript"]["remove"]:
@@ -1398,17 +1435,27 @@ def cmd_trace(git: Git, args) -> int:
 def cmd_delta(git: Git, args) -> int:
     stage = args.stage
     base = git.baseline(stage)
-    changes = diff_models(build_model(git.commit_md(base, *PLAN_DIRS)), build_model(git.working_md(*PLAN_DIRS)))
+    if stage == "plan":
+        scope_dirs = PLAN_DIRS
+        scope_desc = "plan (story/, kb/, outline/)"
+    elif stage in STAGE_DIRS:
+        scope_dirs = STAGE_DIRS[stage]
+        scope_desc = f"{stage} ({', '.join(scope_dirs)})"
+    else:
+        scope_dirs = PLAN_DIRS
+        scope_desc = stage
+
+    changes = diff_models(build_model(git.commit_md(base, *scope_dirs)), build_model(git.working_md(*scope_dirs)))
     if args.json:
         emit_json({"stage": stage, "baseline": base, "changes": [c.to_dict() for c in changes]})
         return 0
-    out = ["# Plan delta (story/, kb/, outline/)", "", baseline_line(stage, git.commit_info(base)),
+    out = [f"# Delta for {scope_desc}", "", baseline_line(stage, git.commit_info(base)),
            f"Changes: {sum(1 for c in changes if c.kind == 'ADDED')} added, "
            f"{sum(1 for c in changes if c.kind == 'MODIFIED')} modified, "
            f"{sum(1 for c in changes if c.kind == 'REMOVED')} removed, "
            f"{sum(1 for c in changes if c.kind == 'MOVED')} moved", ""]
     if not changes:
-        out.append("No plan changes since this baseline.")
+        out.append(f"No changes in {stage} since this baseline.")
     for c in changes:
         s = c.section
         where = {"MOVED": f"{c.old_file} -> {s.location}", "REMOVED": f"was {s.location}"}.get(c.kind, s.location)
@@ -1450,32 +1497,69 @@ def cmd_impact(git: Git, args) -> int:
 
 
 def cmd_accept(git: Git, args) -> int:
-    stages = list(STAGES) if "all" in args.stage else [s for s in STAGES if s in args.stage]
+    requested = args.stage or []
+    stages: List[str] = []
+    if "all" in requested:
+        stages = list(STAGES)
+    else:
+        for s in requested:
+            if s == "plan":
+                for st in SPEC_STAGES:
+                    if st not in stages:
+                        stages.append(st)
+                if "plan" not in stages:
+                    stages.append("plan")
+            elif s in STAGES:
+                if s not in stages:
+                    stages.append(s)
+            else:
+                stages.append(s)
+
     p = load_project(git)
     errors, _, _ = run_checks(p)
     if errors and not args.force:
         raise NovelError("Refusing to accept - check failed (use --force to override):\n  - " + "\n  - ".join(errors))
+
     trailers = [f"{TRAILER}: {', '.join(stages)}"]
-    plan_changes = diff_models(build_model(git.commit_md(git.baseline("plan"), *PLAN_DIRS)), p.plan)
-    if "plan" in stages:
-        for kind in ("ADDED", "MODIFIED", "REMOVED"):
-            ids = [c.id for c in plan_changes if c.id and c.kind == kind]
-            if ids:
-                trailers.append(f"Novel-{kind.capitalize()}: {', '.join(ids)}")
+
+    dirs_to_stage = set()
     for st in stages:
-        if st == "plan":
-            continue
-        old = derived_of(build_model(git.commit_md(git.baseline(st), LAYERS[st])))
-        cur = p.layers[st]
-        updated = [sid for sid, s in cur.scenes.items() if sid not in old.scenes or old.scenes[sid].digest != s.digest]
-        removed = [sid for sid in old.scenes if sid not in cur.scenes]
-        if updated:
-            trailers.append(f"Novel-{st.capitalize()}-Updated: {', '.join(updated)}")
-        if removed:
-            trailers.append(f"Novel-{st.capitalize()}-Removed: {', '.join(removed)}")
-    dirs = [d for d in ALL_DIRS if (git.root / d).exists()]
-    if dirs:
-        git.run("add", "-A", "--", *dirs)
+        if st in STAGE_DIRS:
+            dirs_to_stage.update(STAGE_DIRS[st])
+        elif st == "plan":
+            dirs_to_stage.update(PLAN_DIRS)
+
+    for st in stages:
+        if st in ("plan", "bible", "research", "outline"):
+            scope = STAGE_DIRS.get(st, PLAN_DIRS)
+            base = git.baseline(st)
+            changes = diff_models(build_model(git.commit_md(base, *scope)), build_model(git.working_md(*scope)))
+            for kind in ("ADDED", "MODIFIED", "REMOVED"):
+                ids = [c.id for c in changes if c.id and c.kind == kind]
+                if ids:
+                    prefix = f"Novel-{st.capitalize()}-" if st != "plan" else "Novel-"
+                    trailers.append(f"{prefix}{kind.capitalize()}: {', '.join(ids)}")
+        elif st == "brief":
+            base = git.baseline("brief")
+            scope = STAGE_DIRS["brief"]
+            changes = diff_models(build_model(git.commit_md(base, *scope)), build_model(git.working_md(*scope)))
+            if changes:
+                files_mod = sorted({c.section.file for c in changes})
+                trailers.append(f"Novel-Brief-Modified: {', '.join(files_mod)}")
+        elif st in LAYERS:
+            old = derived_of(build_model(git.commit_md(git.baseline(st), LAYERS[st])))
+            cur = p.layers[st]
+            updated = [sid for sid, s in cur.scenes.items() if sid not in old.scenes or old.scenes[sid].digest != s.digest]
+            removed = [sid for sid in old.scenes if sid not in cur.scenes]
+            if updated:
+                trailers.append(f"Novel-{st.capitalize()}-Updated: {', '.join(updated)}")
+            if removed:
+                trailers.append(f"Novel-{st.capitalize()}-Removed: {', '.join(removed)}")
+
+    existing_paths = [path for path in dirs_to_stage if (git.root / path).exists()]
+    if existing_paths:
+        git.run("add", "-A", "--", *existing_paths)
+
     msg = [f"novel-sync({', '.join(stages)}): {args.message}" if args.message else f"novel-sync({', '.join(stages)})",
            "", *trailers]
     fd, tmp = tempfile.mkstemp(prefix="specnovel-", suffix=".txt")
@@ -1821,7 +1905,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if name == "trace":
             p.add_argument("id", help="ID to trace, e.g. CHR-001")
         if name == "delta":
-            p.add_argument("--stage", choices=STAGES, default="plan", help="baseline to compare against")
+            p.add_argument("--stage", choices=list(STAGES) + ["plan", "all"], default="plan", help="baseline to compare against")
         if name == "impact":
             p.add_argument("--stage", choices=list(LAYERS), required=True)
         if name == "feedback":
@@ -1831,7 +1915,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--stage", choices=["outline", "abridged", "manuscript", "all"],
                            help="filter by target stage")
         if name == "accept":
-            p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["all"])
+            p.add_argument("--stage", action="append", required=True, choices=list(STAGES) + ["plan", "all"])
             p.add_argument("-m", "--message", default="", help="short summary for the commit subject")
             p.add_argument("--force", action="store_true", help="accept even if 'check' reports errors")
         if name == "stats":

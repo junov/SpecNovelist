@@ -368,8 +368,12 @@ SpecNovelist allows progressive disclosure across the pipeline stages:
 3. **Promote Discovered Nuance into `story/style.md`**:
    When your research uncovers authentic period speech patterns (e.g. 19th-century telegraphers using Morse metaphors in daily speech), don't keep it as isolated trivia in `kb/`. Promote it to `story/style.md` under `## 13. Per-POV variations` so the `novel-write` engine naturally infuses it into every sentence of their viewpoint.
 
-4. **Iterate with Baselines**:
-   Once all embryonic placeholders in your brief and outline are resolved:
+4. **Iterate with Decoupled Baselines**:
+   Once embryonic placeholders in your brief are resolved, accept the brief baseline:
+   ```bash
+   python scripts/specnovel.py accept --stage brief -m "Baseline: Resolve demographic placeholders in brief"
+   ```
+   Or accept all specification stages at once:
    ```bash
    python scripts/specnovel.py index
    python scripts/specnovel.py accept --stage plan -m "Baseline: Resolve all demographic placeholders for cast and setting"

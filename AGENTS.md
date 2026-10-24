@@ -63,14 +63,16 @@ by AI writing agents.
 5. **Style Guide Compliance**:
    `story/style.md` is a binding contract for `manuscript/`. Never revert to generic "AI smooth prose".
    Adhere strictly to the POV, tense, rhythm, and anti-patterns defined in `style.md`.
-6. **Git-Native Synchronization**:
-   Project baselines are tracked using `Novel-Sync:` Git commit trailers. Use `specnovel.py`:
-   - `python scripts/specnovel.py status`: Check catalog status, scene coverage, and un-synced drift.
+6. **Git-Native Parallel Synchronization**:
+   Project baselines are tracked using `Novel-Sync:` Git commit trailers across six decoupled stages
+   (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`). Use `specnovel.py`:
+   - `python scripts/specnovel.py status`: Check catalog status, baseline drift, and scene coverage.
+   - `python scripts/specnovel.py delta --stage <stage>`: Isolate changes in a specific input layer (e.g. `brief` for premise changes).
    - `python scripts/specnovel.py check`: Automated integrity checks (fails on dangling links, unsourced facts, misordered scenes, or DAG violations).
    - `python scripts/specnovel.py dag`: Validates story causality DAG (acyclicity, reading order coherence, denouement essentiality).
    - `python scripts/specnovel.py placeholders --create-rq`: Automatically converts placeholders across story specs into cataloged research questions (RQ).
    - `python scripts/specnovel.py impact --stage <abridged|manuscript>`: Identify scenes that need (re)generation.
-   - `python scripts/specnovel.py accept --stage <stage> -m "<msg>"`: Commit synchronized changes.
+   - `python scripts/specnovel.py accept --stage <stage> -m "<msg>"`: Commit synchronized changes and advance stage baselines.
 7. **Story Causality as a DAG & Reading Order Coherence**:
    Story causality is modeled as a Directed Acyclic Graph (DAG) rooted at the novel's final denouement:
    - Every scene and plot element identifies its prerequisites (`Prerequisites: [[ID]]`).

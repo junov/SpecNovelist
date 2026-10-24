@@ -48,16 +48,17 @@ help the author change it precisely. **The author owns the story: you propose, t
    regenerate via `novel-sync`.
 
 ### C. Review the author's own edits
-1. Run `specnovel.py delta` to see ID-level changes since the `plan` baseline.
+1. Run `specnovel.py delta --stage bible` (or `--stage brief`) to see ID-level and premise changes
+   since the last baseline.
 2. Apply [kb-checklist.md](references/kb-checklist.md); report findings as BLOCKER / WARNING /
    NIT with concrete replacement text.
 3. Mechanical fixes (missing IDs via `next-id`, heading syntax, broken `[[ ]]` syntax) may be
    applied without asking, but must be reported.
 
-### D. Accept the plan
-When the author is satisfied with a batch of planning changes (KB and/or outline):
+### D. Accept the story bible or plan
+When the author is satisfied with a batch of story bible changes:
 `specnovel.py check`, `specnovel.py index`, then
-`specnovel.py accept --stage plan -m "<summary>"`.
+`specnovel.py accept --stage bible -m "<summary>"` (or `--stage plan -m "<summary>"`).
 
 ### E. Triage editorial feedback
 When the author provides direct feedback on draft scenes:

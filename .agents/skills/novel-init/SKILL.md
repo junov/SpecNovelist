@@ -114,8 +114,14 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
 1. Run `specnovel.py check` and fix all errors; run `specnovel.py index`.
 2. Present a concise summary: brief highlights, catalog counts per type, research backlog (high
    priority first), open questions, and any style-guide gaps.
-3. On approval: `specnovel.py accept --stage plan -m "Initialize novel plan"`.
+3. On approval: `specnovel.py accept --stage plan -m "Initialize novel plan"` (establishes initial
+   baselines for `brief`, `research`, `bible`, and `outline`).
 4. Recommend the next step: `novel-research` for high-priority `RQ` items, then `novel-outline`.
+
+> [!NOTE]
+> **Decoupled Brief Updates**: `novel-init` is exclusively used for Day 1 onboarding. When the author
+> modifies `story/synopsis.md` or `story/brief.md` later in the project, deltas are isolated using
+> `specnovel.py delta --stage brief` and propagated via `novel-sync`, without re-running `novel-init`.
 
 ## Rules
 - Never edit `story/synopsis.md` or `story/style.md` without the author's explicit approval.

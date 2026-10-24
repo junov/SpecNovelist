@@ -93,9 +93,11 @@ Then review:
 ### 5. Approval and baseline
 Present the outline summary (chapter list with one-liners, thread coverage, open `RQ`s, length
 budget, DAG verification status). On approval: `specnovel.py index`, then
-`specnovel.py accept --stage plan -m "Outline: <summary>"`. Recommend `novel-abridge` next.
+`specnovel.py accept --stage outline -m "Outline: <summary>"` (or `--stage plan`). Recommend `novel-abridge` next.
 
 ## Revising an existing outline
+- To see upstream story bible changes that need outlining, inspect `specnovel.py delta --stage bible`
+  or `specnovel.py delta --stage brief`.
 - **Move** a scene or chapter by moving its whole block; IDs stay the same. Never renumber.
   *Note*: Reordering scenes must not violate reading order coherence with respect to prerequisites!
 - **Cut** a scene by deleting its block (the ID is retired); its derived text is flagged for

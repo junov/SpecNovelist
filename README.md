@@ -334,27 +334,44 @@ tags are stripped from the prose).
 
 ## Incremental Synchronization & Baselines (`novel-sync`)
 
-In SpecNovelist, projects evolve through spec edits. When an author modifies a character's background, changes a
-historical date, or adds a scene to the outline, `novel-sync` propagates the changes downstream:
+In SpecNovelist, projects evolve through decoupled specifications. Rather than treating the entire plan as a single monolithic block, SpecNovelist operates with **six parallel synchronization stages**, each tracked via Git commit trailers (`Novel-Sync:`):
+
+1. **`brief`**: Human-owned premise and constraints (`story/synopsis.md`, `story/brief.md`).
+2. **`research`**: Sourced facts and backlog (`kb/research/`, `kb/sources/`, `kb/facts/`).
+3. **`bible`**: Story bible canon (`kb/characters/`, `kb/places/`, `kb/plot/`, `kb/world/`, `kb/timeline/`).
+4. **`outline`**: Skeleton in reading order (`outline/outline.md`).
+5. **`abridged`**: Condensed intermediate novel (`abridged/`).
+6. **`manuscript`**: Polished literary prose (`manuscript/`).
+
+When an author modifies a premise in `synopsis.md`, adds research facts, adjusts character motivations, or edits a scene beat, `novel-sync` isolates the delta for that specific input and propagates changes downstream:
 
 ```mermaid
 flowchart LR
-    A["Author edits\nstory/, kb/, outline/"] --> B["novel-sync\n(specnovel.py impact)"]
-    B -->|updates beats & dialogue| C["abridged/\n(Abridged Draft)"]
-    C -->|Author Approves| D["abridged baseline\n(Novel-Sync: abridged)"]
-    D -->|renders prose via style.md| E["manuscript/\n(Final Novel)"]
-    E -->|Author Approves| F["manuscript baseline\n(Novel-Sync: manuscript)"]
+    A["story/synopsis.md\nstory/brief.md"] -->|Novel-Sync: brief| B["kb/research/ (RQ)\nkb/facts/ (FCT)"]
+    B -->|Novel-Sync: research| C["kb/ (Story Bible)\nCHR, PLC, PLT, WLD"]
+    C -->|Novel-Sync: bible| D["outline/outline.md\n(PRT, CHP, SCN)"]
+    D -->|Novel-Sync: outline| E["abridged/\n(Abridged Draft)"]
+    E -->|Novel-Sync: abridged| F["manuscript/\n(Final Novel)"]
 ```
 
-1. **Impact Detection**: `specnovel.py impact --stage abridged` analyzes the dependency graph between the
+1. **Input Delta Isolation (`specnovel.py delta --stage <stage>`)**:
+   Isolates changes in any specific input layer. For example, `delta --stage brief` isolates premise/synopsis changes without conflating them with unoutlined research facts.
+2. **Impact Detection**: `specnovel.py impact --stage abridged` analyzes the dependency graph between the
    baseline commit and the working tree, identifying only the specific scenes impacted by changed IDs.
-2. **Sequential Reconciliation**:
+3. **Sequential Reconciliation**:
    - `abridged/` is updated first for impacted scenes.
    - Author reviews and approves the abridged changes.
-   - `manuscript/` is re-rendered for impacted scenes using `story/style.md`.
-3. **Automated Verification**: `specnovel.py check` validates that all scenes exist in outline order, references
+   - `manuscript/` is re-rendered for impacted scenes using `story/style.md` and active editorial directives (`EDT`).
+4. **Automated Verification**: `specnovel.py check` validates that all scenes exist in outline order, references
    resolve, and no tags leak into prose.
-4. **Git Baselines**: The agent records the synchronization using Git commit trailers:
+5. **Git Baselines**: The agent records synchronization using Git commit trailers:
+   ```git
+   novel-sync(brief): Update synopsis premise to include third-act train sabotage
+
+   Novel-Sync: brief
+   Novel-Brief-Modified: story/synopsis.md
+   ```
+   Or for derived layers:
    ```git
    novel-sync(abridged, manuscript): Update collision aftermath
 
@@ -469,9 +486,9 @@ zero external dependencies and interacts directly with Git.
 | `dag` | Validates narrative causality DAG: detects cycles, reading order violations, and inessential dead-ends. | `python scripts/specnovel.py dag` |
 | `next-id` | Allocates the next permanent ID for a prefix (accounting for git history). | `python scripts/specnovel.py next-id CHR` |
 | `trace` | Displays where an ID is defined, referenced, and used across all scenes in reading order. | `python scripts/specnovel.py trace CHR-001` |
-| `delta` | Displays ID-level additions, modifications, and deletions in the plan vs. baseline. | `python scripts/specnovel.py delta --stage plan` |
+| `delta` | Displays additions, modifications, and deletions for any stage (`brief`, `research`, `bible`, `outline`, `plan`). | `python scripts/specnovel.py delta --stage brief` |
 | `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
-| `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers. | `python scripts/specnovel.py accept --stage abridged -m "msg"` |
+| `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers (`brief`, `research`, `bible`, `outline`, `abridged`, `manuscript`, `plan`, `all`). | `python scripts/specnovel.py accept --stage brief -m "msg"` |
 | `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene or status). | `python scripts/specnovel.py feedback [SCN-xxx]` |
 | `placeholders` | Scans specs for placeholders (`[...]`, `<...>`) and optionally auto-generates `RQ` entries. | `python scripts/specnovel.py placeholders --create-rq` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
