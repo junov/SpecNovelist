@@ -92,7 +92,7 @@ PLAN_DIRS = (STORY, KB, OUTLINE)
 ALL_DIRS = (STORY, KB, OUTLINE, GRAPHICS, ABRIDGED, MANUSCRIPT)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 SYNOPSIS_FILE, BRIEF_FILE, STYLE_FILE = "story/synopsis.md", "story/brief.md", "story/style.md"
-CONFIG_FILE, CONFIG_FILE_JSON = "story/config.yaml", "story/config.json"
+CONFIG_FILE = "story/config.md"
 MIN_STYLE_WORDS = 400
 
 SPEC_STAGES = ("brief", "research", "bible", "outline")
@@ -512,123 +512,134 @@ def front_matter(text: str) -> Dict[str, str]:
     return out
 
 
-def parse_simple_yaml(text: str) -> dict:
-    """Parse a subset of YAML (dicts, lists, scalars, comments) with zero pip dependencies."""
-    lines = text.splitlines()
-    cleaned: List[Tuple[int, str]] = []
-    for line in lines:
-        in_double = False
-        in_single = False
-        comment_idx = -1
-        for i, ch in enumerate(line):
-            if ch == '"' and not in_single:
-                in_double = not in_double
-            elif ch == "'" and not in_double:
-                in_single = not in_single
-            elif ch == '#' and not in_double and not in_single:
-                comment_idx = i
-                break
-        if comment_idx >= 0:
-            line = line[:comment_idx]
-        if line.strip():
-            indent = len(line) - len(line.lstrip(" "))
-            cleaned.append((indent, line.strip()))
+def parse_config_markdown(text: str) -> dict:
+    """Parse Markdown-based project configuration (story/config.md)."""
+    field_re = re.compile(r"^\s*[-*]\s+\*\*([A-Za-z0-9_\s-]+):\*\*\s*(.*)$")
+    list_item_re = re.compile(r"^\s*[-*]\s+([^*].*)$")
 
-    def parse_val(v: str):
-        v = v.strip()
-        if not v or v in ("null", "~"):
-            return None
-        if v.lower() in ("true", "yes"):
+    def clean_val(v_str: str):
+        v_str = v_str.strip()
+        if (v_str.startswith('"') and v_str.endswith('"')) or (v_str.startswith("'") and v_str.endswith("'")):
+            v_str = v_str[1:-1].strip()
+        v_lower = v_str.lower()
+        if v_lower in ("true", "yes"):
             return True
-        if v.lower() in ("false", "no"):
+        if v_lower in ("false", "no"):
             return False
-        if v == "[]":
-            return []
-        if v == "{}":
-            return {}
-        if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-            return v[1:-1]
-        try:
-            if "." in v:
-                return float(v)
-            return int(v)
-        except ValueError:
-            return v
+        if v_lower in ("null", "none", "~", ""):
+            return None
+        if re.match(r"^-?\d+$", v_str):
+            return int(v_str)
+        return v_str
 
-    def parse_block(idx: int, min_indent: int):
-        if idx >= len(cleaned):
-            return None, idx
-        first_indent, first_line = cleaned[idx]
-        is_list = first_line.startswith("- ")
+    raw: dict = {}
+    current_sec: Optional[str] = None
+    current_subsec: Optional[str] = None
+    current_list_key: Optional[str] = None
 
-        if is_list:
-            res_list = []
-            while idx < len(cleaned):
-                indent, line = cleaned[idx]
-                if indent < min_indent or not line.startswith("- "):
-                    break
-                item_content = line[2:].strip()
-                idx += 1
-                if ":" in item_content and not (item_content.startswith('"') or item_content.startswith("'")):
-                    k, v = item_content.split(":", 1)
-                    item_dict = {}
-                    if v.strip():
-                        item_dict[k.strip()] = parse_val(v)
-                    else:
-                        sub, idx = parse_block(idx, indent + 2)
-                        item_dict[k.strip()] = sub
-                    while idx < len(cleaned):
-                        sub_indent, sub_line = cleaned[idx]
-                        if sub_indent <= indent or sub_line.startswith("- "):
-                            break
-                        if ":" in sub_line:
-                            sk, sv = sub_line.split(":", 1)
-                            idx += 1
-                            if sv.strip():
-                                item_dict[sk.strip()] = parse_val(sv)
-                            else:
-                                sub_val, idx = parse_block(idx, sub_indent + 2)
-                                item_dict[sk.strip()] = sub_val
-                        else:
-                            break
-                    res_list.append(item_dict)
-                elif item_content:
-                    res_list.append(parse_val(item_content))
-                else:
-                    sub, idx = parse_block(idx, indent + 2)
-                    res_list.append(sub)
-            return res_list, idx
-        else:
-            res_dict = {}
-            while idx < len(cleaned):
-                indent, line = cleaned[idx]
-                if indent < min_indent or line.startswith("- "):
-                    break
-                if ":" not in line:
-                    idx += 1
-                    continue
-                k, v = line.split(":", 1)
-                k = k.strip()
-                v = v.strip()
-                idx += 1
-                if v:
-                    res_dict[k] = parse_val(v)
-                else:
-                    if idx < len(cleaned) and cleaned[idx][0] > indent:
-                        sub, idx = parse_block(idx, cleaned[idx][0])
-                        res_dict[k] = sub
-                    else:
-                        res_dict[k] = None
-            return res_dict, idx
+    for line in text.splitlines():
+        line_str = line.strip()
+        if not line_str or line_str.startswith("<!--"):
+            continue
 
-    res, _ = parse_block(0, 0)
-    return res if isinstance(res, dict) else {}
+        if line_str.startswith("# "):
+            current_sec = "top"
+            current_subsec = None
+            current_list_key = None
+            continue
+        elif line_str.startswith("## "):
+            sec_title = line_str[3:].strip().lower().replace(" ", "_").replace("-", "_")
+            current_sec = sec_title
+            current_subsec = None
+            current_list_key = None
+            if current_sec not in raw:
+                raw[current_sec] = {} if current_sec != "contributors" else []
+            continue
+        elif line_str.startswith("### "):
+            subsec_title = line_str[4:].strip()
+            current_subsec = subsec_title
+            current_list_key = None
+            if current_sec == "locales":
+                if not isinstance(raw.get("locales"), dict):
+                    raw["locales"] = {}
+                raw["locales"][current_subsec] = {}
+            elif current_sec == "contributors":
+                if not isinstance(raw.get("contributors"), list):
+                    raw["contributors"] = []
+                raw["contributors"].append({"name": subsec_title})
+            continue
+
+        m = field_re.match(line)
+        if m:
+            k = m.group(1).strip().lower().replace(" ", "_").replace("-", "_")
+            v_str = m.group(2).strip()
+            v = clean_val(v_str)
+
+            if k in ("targets", "target_languages"):
+                current_list_key = k
+                if v is None:
+                    v = []
+                elif isinstance(v, str):
+                    v = [x.strip() for x in v.split(",") if x.strip()]
+            else:
+                current_list_key = None
+
+            if current_sec == "top" or current_sec is None:
+                raw[k] = v
+            elif current_sec == "locales" and current_subsec:
+                raw["locales"][current_subsec][k] = v
+            elif current_sec == "contributors" and isinstance(raw.get("contributors"), list) and raw["contributors"]:
+                raw["contributors"][-1][k] = v
+            elif isinstance(raw.get(current_sec), dict):
+                raw[current_sec][k] = v
+            continue
+
+        lm = list_item_re.match(line)
+        if lm:
+            item_val = lm.group(1).strip()
+            if (cleaned := clean_val(item_val)) is not None:
+                item_val = str(cleaned) if not isinstance(cleaned, (int, float, bool)) else cleaned
+            if current_sec == "languages" and current_list_key in ("targets", "target_languages"):
+                if isinstance(raw.get("languages", {}).get(current_list_key), list):
+                    raw["languages"][current_list_key].append(item_val)
+            elif current_sec == "contributors":
+                if isinstance(raw.get("contributors"), list):
+                    raw["contributors"].append({"name": item_val})
+
+    return raw
 
 
 CONFIG_ALLOWED_TOP_KEYS = {
     "schema_version", "project", "author", "languages",
-    "front_matter", "back_matter", "contributors", "publication",
+    "front_matter", "back_matter", "compilation", "contributors", "publication",
     "budget", "locales"
+}
+
+CONFIG_ALLOWED_PROJECT_KEYS = {
+    "title", "subtitle", "edition", "copyright_year", "license", "working_title", "genre"
+}
+CONFIG_ALLOWED_AUTHOR_KEYS = {
+    "name", "legal_name", "email", "url"
+}
+CONFIG_ALLOWED_LANGUAGES_KEYS = {
+    "primary", "targets", "target_languages"
+}
+CONFIG_ALLOWED_FRONT_KEYS = {
+    "foreword", "foreword_file", "dedication", "epigraph", "preface"
+}
+CONFIG_ALLOWED_BACK_KEYS = {
+    "include_glossary", "include_bibliography", "historical_note", "historical_note_file",
+    "afterword", "acknowledgments"
+}
+CONFIG_ALLOWED_COMPILATION_KEYS = {
+    "include_glossary", "include_bibliography", "foreword", "foreword_file",
+    "historical_note", "historical_note_file"
+}
+CONFIG_ALLOWED_BUDGET_KEYS = {
+    "target_words", "tolerance_pct", "expansion_factors"
+}
+CONFIG_ALLOWED_PUBLICATION_KEYS = {
+    "publisher", "imprint", "isbn"
 }
 
 
@@ -682,6 +693,9 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
     if not isinstance(proj, dict):
         errors.append("missing required section: 'project' (must be a dictionary)")
     else:
+        for k in proj:
+            if k not in CONFIG_ALLOWED_PROJECT_KEYS:
+                errors.append(f"unknown key in 'project': '{k}'")
         title = str(proj.get("title") or "")
         if not title:
             errors.append("missing required field: 'project.title'")
@@ -695,6 +709,9 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
     if not isinstance(auth, dict):
         errors.append("missing required section: 'author' (must be a dictionary)")
     else:
+        for k in auth:
+            if k not in CONFIG_ALLOWED_AUTHOR_KEYS:
+                errors.append(f"unknown key in 'author': '{k}'")
         author_name = str(auth.get("name") or "")
         if not author_name:
             errors.append("missing required field: 'author.name'")
@@ -708,10 +725,13 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
     if not isinstance(langs, dict):
         errors.append("missing required section: 'languages' (must be a dictionary)")
     else:
+        for k in langs:
+            if k not in CONFIG_ALLOWED_LANGUAGES_KEYS:
+                errors.append(f"unknown key in 'languages': '{k}'")
         primary_lang = str(langs.get("primary") or "")
         if not primary_lang:
             errors.append("missing required field: 'languages.primary'")
-        raw_targets = langs.get("targets")
+        raw_targets = langs.get("targets") if "targets" in langs else langs.get("target_languages")
         if not isinstance(raw_targets, list) or not raw_targets:
             errors.append("missing or empty required field: 'languages.targets' (must be a non-empty list of locale codes)")
         else:
@@ -724,13 +744,13 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
     dedication = None
     epigraph = None
     if isinstance(fm, dict):
-        foreword_path = fm.get("foreword")
-        if foreword_path is not None:
-            foreword_path = str(foreword_path)
+        foreword_val = fm.get("foreword") if "foreword" in fm else fm.get("foreword_file")
+        if foreword_val is not None:
+            foreword_path = str(foreword_val)
         dedication = fm.get("dedication")
         epigraph = fm.get("epigraph")
         for k in fm:
-            if k not in {"foreword", "dedication", "epigraph", "preface"}:
+            if k not in CONFIG_ALLOWED_FRONT_KEYS:
                 errors.append(f"unknown key in 'front_matter': '{k}'")
     elif fm is not None:
         errors.append("'front_matter' must be a dictionary")
@@ -752,24 +772,62 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
                 errors.append("'back_matter.include_bibliography' must be a boolean (true/false)")
             else:
                 include_bibliography = bm["include_bibliography"]
-        if bm.get("historical_note"):
-            historical_note_path = str(bm["historical_note"])
+        hn_val = bm.get("historical_note") if "historical_note" in bm else bm.get("historical_note_file")
+        if hn_val:
+            historical_note_path = str(hn_val)
         if bm.get("afterword"):
             afterword_path = str(bm["afterword"])
         if bm.get("acknowledgments"):
             acknowledgments_path = str(bm["acknowledgments"])
         for k in bm:
-            if k not in {"include_glossary", "include_bibliography", "historical_note", "afterword", "acknowledgments"}:
+            if k not in CONFIG_ALLOWED_BACK_KEYS:
                 errors.append(f"unknown key in 'back_matter': '{k}'")
     elif bm is not None:
         errors.append("'back_matter' must be a dictionary")
+
+    # If compilation section was supplied (support both formats)
+    comp = raw.get("compilation")
+    if isinstance(comp, dict):
+        for k in comp:
+            if k not in CONFIG_ALLOWED_COMPILATION_KEYS:
+                errors.append(f"unknown key in 'compilation': '{k}'")
+        if "include_glossary" in comp:
+            if not isinstance(comp["include_glossary"], bool):
+                errors.append("'compilation.include_glossary' must be a boolean (true/false)")
+            else:
+                include_glossary = comp["include_glossary"]
+        if "include_bibliography" in comp:
+            if not isinstance(comp["include_bibliography"], bool):
+                errors.append("'compilation.include_bibliography' must be a boolean (true/false)")
+            else:
+                include_bibliography = comp["include_bibliography"]
+        cfwd = comp.get("foreword_file") if "foreword_file" in comp else comp.get("foreword")
+        if cfwd:
+            foreword_path = str(cfwd)
+        chn = comp.get("historical_note_file") if "historical_note_file" in comp else comp.get("historical_note")
+        if chn:
+            historical_note_path = str(chn)
 
     contributors = raw.get("contributors") or []
     if not isinstance(contributors, list):
         errors.append("'contributors' must be a list")
 
     publication = raw.get("publication") or {}
+    if isinstance(publication, dict):
+        for k in publication:
+            if k not in CONFIG_ALLOWED_PUBLICATION_KEYS:
+                errors.append(f"unknown key in 'publication': '{k}'")
+    elif publication is not None:
+        errors.append("'publication' must be a dictionary")
+
     budget = raw.get("budget") or {}
+    if isinstance(budget, dict):
+        for k in budget:
+            if k not in CONFIG_ALLOWED_BUDGET_KEYS:
+                errors.append(f"unknown key in 'budget': '{k}'")
+    elif budget is not None:
+        errors.append("'budget' must be a dictionary")
+
     locales = raw.get("locales") or {}
 
     return ProjectConfig(
@@ -803,20 +861,25 @@ def validate_and_load_config(raw: dict) -> ProjectConfig:
 
 
 def load_project_config(git: Git) -> ProjectConfig:
-    yaml_path = git.root / CONFIG_FILE
-    json_path = git.root / CONFIG_FILE_JSON
-    if yaml_path.is_file():
+    md_path = git.root / CONFIG_FILE
+    yaml_path = git.root / "story/config.yaml"
+    json_path = git.root / "story/config.json"
+    if md_path.is_file():
         try:
-            raw = parse_simple_yaml(yaml_path.read_text(encoding="utf-8", errors="replace"))
+            raw = parse_config_markdown(md_path.read_text(encoding="utf-8", errors="replace"))
             return validate_and_load_config(raw)
         except Exception as e:
             return ProjectConfig(errors=[f"failed to parse {CONFIG_FILE}: {e}"])
+    elif yaml_path.is_file():
+        return ProjectConfig(errors=[
+            f"legacy configuration file '{yaml_path.name}' detected; "
+            f"SpecNovelist has unified on Markdown. Please migrate to '{CONFIG_FILE}'"
+        ])
     elif json_path.is_file():
-        try:
-            raw = json.loads(json_path.read_text(encoding="utf-8", errors="replace"))
-            return validate_and_load_config(raw)
-        except Exception as e:
-            return ProjectConfig(errors=[f"failed to parse {CONFIG_FILE_JSON}: {e}"])
+        return ProjectConfig(errors=[
+            f"legacy configuration file '{json_path.name}' detected; "
+            f"SpecNovelist has unified on Markdown. Please migrate to '{CONFIG_FILE}'"
+        ])
     return ProjectConfig(errors=[f"missing project configuration file: {CONFIG_FILE}"])
 
 

@@ -74,7 +74,7 @@ When adding specialized terminology, slang, archaic words, or invented world ter
 1. Review `## Glossary Guidelines` in `story/style.md` to ensure the term qualifies.
 2. Allocate ID via `python scripts/specnovel.py next-id GLS`.
 3. Create `kb/glossary/GLS-NNN.md` with term, pronunciation/etymology, brief definition, and story context.
-4. When `compilation.include_glossary` is enabled in `story/config.yaml`, terms are automatically injected into compiled books.
+4. When `compilation.include_glossary` is enabled in `story/config.md`, terms are automatically injected into compiled books.
 
 ## Rules
 * Never edit `abridged/` or `manuscript/` here; never create `FCT`/`SRC` entries here.

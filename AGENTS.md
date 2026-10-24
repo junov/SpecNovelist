@@ -10,7 +10,7 @@ by AI writing agents.
 ## 1. Top-Level Folder Roles
 
 - **`story/`**: **Human-Owned Inputs & Style Mandate.**
-  - `config.yaml`: **The Project Configuration Specification.** Follows a strict schema containing Author Identity,
+  - `config.md`: **The Project Configuration Specification.** Follows a strict Markdown schema containing Author Identity,
     target languages (with designated primary), optional foreword path, bibliography and glossary compilation toggles,
     and publication metadata.
   - `synopsis.md`: The seed synopsis. Never rewritten by agents without explicit author approval.
@@ -106,10 +106,10 @@ by AI writing agents.
      exactly how far out of sync it is (commits behind HEAD and which upstream prerequisites changed).
 
 10. **Strict Project Configuration Compliance**:
-    `story/config.yaml` is the project configuration source of truth and must conform to its strict schema.
+    `story/config.md` is the project configuration source of truth and must conform to its strict schema.
     It defines Author Identity, target locales (with one designated primary), optional foreword file paths,
     compilation toggles (glossary, bibliography), and publication metadata. Any changes to supported
-    locales or front/back matter must be declared in `config.yaml` and validated via `python scripts/specnovel.py check`.
+    locales or front/back matter must be declared in `config.md` and validated via `python scripts/specnovel.py check`.
 11. **Multilingual Manuscript & Localized Graphics Compliance**:
     Manuscripts targeting multiple languages are organized in dedicated subdirectories: `manuscript/<locale>/CHP-NNN.md`.
     - Style guidelines provide locale-specific sections (`# Locale: <locale>`) for grammar, rhythm, and idioms.
@@ -122,7 +122,7 @@ by AI writing agents.
     - Bibliographical citations in compiled manuscripts are strictly generated from facts attached to the story DAG
       via `python scripts/specnovel.py bibliography`. Sources citing detached or pruned facts are excluded.
     - Glossary terms (`GLS`) are authored according to `## Glossary Guidelines` in `story/style.md`, refined
-      via editorial directives, and automatically injected into compiled books when enabled in `story/config.yaml`.
+      via editorial directives, and automatically injected into compiled books when enabled in `story/config.md`.
 
 ---
 

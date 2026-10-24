@@ -99,7 +99,7 @@ Every SpecNovelist project conforms to a clean, modular folder structure:
 ```text
 my-novel/
 ├── story/                      # HUMAN-OWNED INPUTS & SPECIFICATIONS
-│   ├── config.yaml             # Project configuration (author, languages, toggles, metadata)
+│   ├── config.md               # Project configuration (author, languages, toggles, metadata)
 │   ├── synopsis.md             # The seed synopsis (human-owned; never edited without permission)
 │   ├── brief.md                # Discovery interview decisions: premise, genre, length, settings, rigor
 │   ├── style.md                # BINDING writing-style guide (voice, rhythm, POV, locale guides)
@@ -436,38 +436,38 @@ When an author or editor provides direct feedback on intermediate artifacts (`ou
 
 ## Project Configuration & Multilingual Publishing
 
-### Strict Project Configuration (`story/config.yaml`)
-Every novel defines publishing metadata, contributor attributions, target languages, and compilation toggles in `story/config.yaml`:
+### Strict Project Configuration (`story/config.md`)
+Every novel defines publishing metadata, contributor attributions, target languages, and compilation toggles in `story/config.md`, unifying the entire project on Markdown:
 
-```yaml
-schema_version: 1
+```markdown
+# Project Configuration
+- **Schema Version:** 1.0
 
-project:
-  title: "The Ice and the Iron"
-  working_title: "Project Boreas"
-  genre: "Historical Fiction / Mystery"
+## Project
+- **Title:** The Ice and the Iron
+- **Working Title:** Project Boreas
+- **Genre:** Historical Fiction / Mystery
 
-author:
-  name: "Elena Rostova"
-  email: "elena@example.com"
+## Author
+- **Name:** Elena Rostova
+- **Email:** elena@example.com
 
-languages:
-  primary: "en-US"
-  targets:
-    - "en-US"
-    - "fr-FR"
+## Languages
+- **Primary:** en-US
+- **Targets:**
+  - en-US
+  - fr-FR
 
-compilation:
-  include_foreword: true
-  foreword_file: "story/foreword.md"
-  include_glossary: true
-  include_bibliography: true
+## Compilation
+- **Foreword File:** story/foreword.md
+- **Include Glossary:** true
+- **Include Bibliography:** true
 ```
 
 The schema is strictly validated by `specnovel.py check`:
 - `languages.primary` must be present in `languages.targets`.
 - If `include_foreword` is `true`, `foreword_file` must resolve to an existing Markdown file.
-- Unknown top-level keys or improperly typed blocks are rejected immediately.
+- Unknown top-level sections or improperly typed fields are rejected immediately.
 
 ### Multilingual Manuscript Organization
 Manuscripts targeting multiple languages are kept in dedicated subdirectories:

@@ -108,7 +108,7 @@ class ProjectTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- tests
     def test_init_scaffolds_templates(self):
-        for rel in ("story/brief.md", "outline/outline.md", "kb/facts/.gitkeep", "manuscript/.gitkeep"):
+        for rel in ("story/brief.md", "story/config.md", "outline/outline.md", "kb/facts/.gitkeep", "manuscript/.gitkeep"):
             self.assertTrue((self.root / rel).exists(), rel)
         self.assertIn("build/", (self.root / ".gitignore").read_text())
 
@@ -601,58 +601,76 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
     def test_config_schema_validation(self):
         # 1. Invalid schema: unknown top-level key
         bad_config = """\
-schema_version: "1.0"
-unknown_key: "invalid"
-project:
-  title: "Valid Title"
-author:
-  name: "Author"
-languages:
-  primary: "en-US"
-  targets:
-    - "en-US"
+# Project Configuration
+- **Schema Version:** 1.0
+- **Unknown Key:** invalid
+
+## Project
+- **Title:** Valid Title
+
+## Author
+- **Name:** Author
+
+## Languages
+- **Primary:** en-US
+- **Targets:**
+  - en-US
 """
-        self.write("story/config.yaml", bad_config)
+        self.write("story/config.md", bad_config)
         code, res = self.json_cli("check")
         self.assertEqual(code, 1)
         self.assertTrue(any("unknown top-level configuration key 'unknown_key'" in e for e in res["errors"]))
 
         # 2. Invalid schema: primary language not in targets
         mismatched_langs = """\
-schema_version: "1.0"
-project:
-  title: "Valid Title"
-author:
-  name: "Author"
-languages:
-  primary: "de-DE"
-  targets:
-    - "en-US"
-    - "fr-FR"
+# Project Configuration
+- **Schema Version:** 1.0
+
+## Project
+- **Title:** Valid Title
+
+## Author
+- **Name:** Author
+
+## Languages
+- **Primary:** de-DE
+- **Targets:** en-US, fr-FR
 """
-        self.write("story/config.yaml", mismatched_langs)
+        self.write("story/config.md", mismatched_langs)
         code, res = self.json_cli("check")
         self.assertEqual(code, 1)
         self.assertTrue(any("primary language 'de-DE' must be included in 'languages.targets'" in e for e in res["errors"]))
 
         # 3. Missing foreword file
         fwd_config = """\
-schema_version: "1.0"
-project:
-  title: "Valid Title"
-author:
-  name: "Author"
-languages:
-  primary: "en-US"
-  targets:
-    - "en-US"
-front_matter:
-  foreword: "story/missing_foreword.md"
+# Project Configuration
+- **Schema Version:** 1.0
+
+## Project
+- **Title:** Valid Title
+
+## Author
+- **Name:** Author
+
+## Languages
+- **Primary:** en-US
+- **Targets:** en-US
+
+## Front Matter
+- **Foreword:** story/missing_foreword.md
 """
-        self.write("story/config.yaml", fwd_config)
+        self.write("story/config.md", fwd_config)
         code, res = self.json_cli("check")
         self.assertEqual(code, 1)
         self.assertTrue(any("front_matter.foreword references missing file" in e for e in res["errors"]))
+
+        # 4. Legacy config.yaml detection
+        (self.root / "story/config.md").unlink()
+        self.write("story/config.yaml", "legacy: true\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("legacy configuration file 'config.yaml' detected" in e for e in res["errors"]))
+        (self.root / "story/config.yaml").unlink()
 
     def test_bibliography_filtered_by_dag(self):
         # Add an unattached fact and source to KB
@@ -672,21 +690,26 @@ front_matter:
     def test_multilingual_editorial_directives_and_graphics_checks(self):
         # Configure multilingual targets
         multi_config = """\
-schema_version: "1.0"
-project:
-  title: "The Crossing"
-author:
-  name: "Justin Novosad"
-languages:
-  primary: "en-US"
-  targets:
-    - "en-US"
-    - "fr-FR"
-back_matter:
-  include_glossary: true
-  include_bibliography: true
+# Project Configuration
+- **Schema Version:** 1.0
+
+## Project
+- **Title:** The Crossing
+
+## Author
+- **Name:** Justin Novosad
+
+## Languages
+- **Primary:** en-US
+- **Targets:**
+  - en-US
+  - fr-FR
+
+## Back Matter
+- **Include Glossary:** true
+- **Include Bibliography:** true
 """
-        self.write("story/config.yaml", multi_config)
+        self.write("story/config.md", multi_config)
         # Update style.md with fr-FR section
         self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n" + "rule " * 500)
 

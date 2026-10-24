@@ -124,7 +124,7 @@ Present a concise summary of the abridged changes to the author:
 ### 6. Synchronize the Manuscript Layer (`manuscript/`)
 For each scene flagged under `impact --stage manuscript`:
 - Use the `novel-write` skill conventions.
-- Consult `story/config.yaml` for configured `languages.targets`.
+- Consult `story/config.md` for configured `languages.targets`.
 - For each target locale (e.g. `en-US`, `fr-FR`):
   - Read the updated abridged scene, `story/style.md` (including `# Locale: <locale>` sections), and referenced `kb/` entries.
   - Ingest active editorial directives targeting this scene and locale (`specnovel.py feedback SCN-xxx --locale <locale>`).
@@ -142,7 +142,7 @@ python scripts/specnovel.py stats
 ```
 Verify that:
 - Story Causality DAG is acyclic, reading order coherence is preserved (all prerequisites precede their dependents), and every element has a path to the root denouement.
-- Project configuration (`story/config.yaml`) validates against schema and foreword paths resolve.
+- Project configuration (`story/config.md`) validates against schema and foreword paths resolve.
 - Every scene in the outline exists in both `abridged/` and `manuscript/` (for all configured locales) in the correct reading order.
 - All active graphics referenced by the Story DAG exist on disk under `graphics/`, and localized graphic references in manuscript files point to matching locale versions or valid base fallbacks.
 - No dangling references or orphan scenes exist.

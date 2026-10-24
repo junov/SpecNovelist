@@ -63,7 +63,7 @@ python scripts/specnovel.py check
   prose directly from an outline without an abridged draft.
 
 ### 3. Load Context per Scene and Locale
-For each target scene (`SCN-xxx`) and target locale (`<locale>` from `story/config.yaml`):
+For each target scene (`SCN-xxx`) and target locale (`<locale>` from `story/config.md`):
 1. **Read `abridged/CHP-xxx.md`**: Isolate the scene's abridged narrative. Note every action beat,
    every line of dialogue, and the final emotional/value shift.
 2. **Read `story/style.md`**: Review general style guidelines plus any `# Locale: <locale>` sections:

@@ -52,7 +52,7 @@ Verifies:
   - **Reading Order**: Every element in the outline is preceded by all its prerequisites.
   - **Denouement Essentiality**: Every element in the story has a directed causal path to the novel's final denouement root (no dead-ends or inessential scenes).
 - **Integrity & References**:
-  - `story/config.yaml` conforms strictly to the schema (author identity, target languages, foreword path if enabled, compilation flags).
+  - `story/config.md` conforms strictly to the schema (author identity, target languages, foreword path if enabled, compilation flags).
   - All cataloged IDs are unique across the project (including `GLS` glossary entries).
   - No dangling wiki-links (`[[ID]]`) exist.
   - All plot elements (`PLT`) carry valid Time and Place metadata for transition clarity.
@@ -116,7 +116,7 @@ Audits whether the manuscript honors the researched facts cataloged in `kb/facts
 
 Audits `manuscript/<locale>/` against `story/style.md` and `# Locale: <locale>`:
 1. **Locale-Specific Sections & Glossary Guidelines**:
-   - Verify that `story/style.md` contains `# Locale: <locale>` sections for each language target configured in `story/config.yaml`.
+   - Verify that `story/style.md` contains `# Locale: <locale>` sections for each language target configured in `story/config.md`.
    - Verify that `## Glossary Guidelines` are defined if glossary compilation is enabled.
 2. **Anti-pattern Scan**:
    - Search manuscript files for forbidden clichés, filter words ("she heard", "he felt"), and
