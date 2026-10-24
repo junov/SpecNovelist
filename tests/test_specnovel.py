@@ -77,7 +77,7 @@ class ProjectTest(unittest.TestCase):
         self.git("config", "user.email", "t@example.com")
         self.git("config", "user.name", "Test")
         self.write("story/synopsis.md", "---\ntitle: The Crossing\n---\n# Synopsis\n" + "word " * 50)
-        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n## Publication & Book Design Guidelines\n" + "rule " * 500)
         self.write("kb/characters/CHR-001-elena.md", CHAR)
         self.write("kb/characters/CHR-002-karl.md", CHAR2)
         self.write("kb/places/PLC-001-harbor.md", PLACE)
@@ -711,7 +711,7 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
 """
         self.write("story/config.md", multi_config)
         # Update style.md with fr-FR section
-        self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n## Graphics Guidelines\n## Publication & Book Design Guidelines\n" + "rule " * 500)
 
         # 1. Editorial directives tagged with locales
         edt_fr = """\
@@ -861,13 +861,13 @@ Elena opens the letter.
 
     def test_style_graphics_guidelines_and_outline_placement(self):
         # 1. Missing Graphics Guidelines in style.md emits warning in check
-        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Publication & Book Design Guidelines\n" + "rule " * 500)
         code, res = self.json_cli("check")
         self.assertEqual(code, 0)
         self.assertTrue(any("lacks '## Graphics Guidelines' section" in w for w in res["warnings"]))
 
         # 2. Restoring Graphics Guidelines resolves warning
-        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n## Publication & Book Design Guidelines\n" + "rule " * 500)
         code, res = self.json_cli("check")
         self.assertEqual(code, 0)
         self.assertFalse(any("lacks '## Graphics Guidelines' section" in w for w in res["warnings"]))
@@ -899,6 +899,61 @@ Elena opens the letter.
         self.assertEqual(code, 0)
         active_assets = [item["id"] for item in impact_res["active"]]
         self.assertIn("GFX-001", active_assets)
+
+    def test_publication_guidelines_and_compile(self):
+        # 1. Missing Publication Guidelines in style.md emits warning in check
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertTrue(any("lacks '## Publication & Book Design Guidelines' section" in w for w in res["warnings"]))
+
+        # 2. Add full Publication & Book Design Guidelines to style.md
+        pub_style = """# Style
+# Locale: en-US
+## Glossary Guidelines
+## Graphics Guidelines
+## Publication & Book Design Guidelines
+
+### Page Layout & Trim Size
+- **Trim Size:** 6in x 9in
+- **Inner Margin:** 0.85in
+- **Outer Margin:** 0.60in
+- **Top Margin:** 0.80in
+- **Bottom Margin:** 0.80in
+
+### Interior Typography
+- **Body Font:** Baskerville
+- **Heading Font:** Playfair Display
+- **Font Size:** 11.5pt
+- **Line Height:** 1.40
+- **Scene Break:** ❦
+
+""" + "rule " * 500
+        self.write("story/style.md", pub_style)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertFalse(any("lacks '## Publication & Book Design Guidelines' section" in w for w in res["warnings"]))
+
+        # 3. Compile manuscript and verify publication typography & geometry in output
+        self.write("manuscript/CHP-001.md", ABRIDGED_1)
+        code, _ = self.run_cli("compile")
+        self.assertEqual(code, 0)
+
+        book_md = (self.root / "build/manuscript.md").read_text(encoding="utf-8")
+        self.assertIn("paperwidth=6in", book_md)
+        self.assertIn("paperheight=9in", book_md)
+        self.assertIn("inner=0.85in", book_md)
+        self.assertIn("outer=0.60in", book_md)
+        self.assertIn('mainfont: "Baskerville"', book_md)
+        self.assertIn("fontsize: 11.5pt", book_md)
+        self.assertIn("linestretch: 1.40", book_md)
+        self.assertIn("❦", book_md)
+
+        # 4. Verify generated EPUB stylesheet
+        epub_css = (self.root / "build/epub.css").read_text(encoding="utf-8")
+        self.assertIn('font-family: "Baskerville", "Georgia", serif;', epub_css)
+        self.assertIn('font-family: "Playfair Display", "Baskerville", serif;', epub_css)
+        self.assertIn("line-height: 1.40;", epub_css)
 
 
 if __name__ == "__main__":

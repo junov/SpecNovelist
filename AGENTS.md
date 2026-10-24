@@ -17,7 +17,7 @@ by AI writing agents.
   - `brief.md`: Interview decisions: premise, genre, audience, length, POV, setting eras, research rigor.
   - `style.md`: **Binding writing-style guide** for the manuscript. Dictates voice, rhythm, POV, diction,
     dialogue conventions, interiority, glossary guidelines, graphics guidelines (`## Graphics Guidelines`),
-    and locale-specific sections (`# Locale: <locale>`).
+    publication guidelines (`## Publication & Book Design Guidelines`), and locale-specific sections (`# Locale: <locale>`).
   - `acknowledgements.md`: **Mandatory Verbatim Acknowledgements.** Preserves credits, tool attributions, and
     mandatory disclosures for all AI models utilized by contributing agents, injected verbatim into compiled books.
   - `editorial/`: **The Editorial Feedback Database (`EDT-NNN.md`).** Records situational, scene-specific, or
@@ -154,3 +154,4 @@ by AI writing agents.
 | **`novel-write`** | Final Prose Rendering | When rendering final literary prose in `manuscript/` from `abridged/` + `story/style.md` + `kb/`. Enforces style, sensory grounding, graphics embedding, and anti-pattern bans. |
 | **`novel-sync`** | Incremental Compilation Engine | When changes in `story/`, `kb/`, or `outline/` need to be compiled and synchronized into `graphics/`, `abridged/`, and `manuscript/`, running integrity checks and advancing git baselines. |
 | **`novel-verify`** | Continuity & Quality Assurance | When auditing character physical continuity, timeline chronology, fact fidelity, or style guide compliance; triaging story defects; or detecting unauthorized draft drift. |
+| **`novel-publish`** | Deliverable Book Publishing | When compiling, styling, and publishing the completed manuscript to distribution-ready EPUB, PDF, DOCX, or Markdown formats, applying interior book typography, cover artwork, and page geometry. |

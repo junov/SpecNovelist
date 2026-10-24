@@ -570,6 +570,7 @@ It governs prose craft and visual asset rules across 17 structured domains:
 15. **Voice Anchors**: 2–5 exemplar passages illustrating the target voice for the agent to emulate.
 16. **Glossary Guidelines (`## Glossary Guidelines`)**: Criteria for automatic term discovery and candidate inclusion.
 17. **Graphics Guidelines (`## Graphics Guidelines`)**: Intensity parameter (`none`, `minimal`, `selective`, `rich`), artistic rendering styles (medium, palette, lighting), technical rendering styles (cartography, schematics, linework), usage triggers, negative rules, placement conventions, aspect ratios, and text localization policy.
+18. **Publication & Book Design Guidelines (`## Publication & Book Design Guidelines`)**: Formats (`epub`, `pdf`, `docx`), trim size (5.5"x8.5", 6"x9", A5), inner gutter margins for spine binding, body and display typefaces (e.g. EB Garamond, Baskerville), type scale, line height, paragraph indentation, drop caps, scene break ornaments, running headers/footers, and EPUB dark-mode stylesheets.
 
 ---
 
@@ -595,7 +596,7 @@ zero external dependencies and interacts directly with Git.
 | `models` | Audits contributing AI models recorded in Git trailers against mandatory disclosure in `story/acknowledgements.md`. | `python scripts/specnovel.py models [--json]` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
 | `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
-| `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF; injects foreword, glossary, DAG bibliography, and verbatim acknowledgements). | `python scripts/specnovel.py compile --format epub [--locale fr-FR]` |
+| `compile` | Assembles the novel in reading order into `build/` (supports EPUB, PDF, DOCX, Markdown; applies interior typography, trim size, gutter margins, custom CSS, foreword, glossary, DAG bibliography, and verbatim acknowledgements). | `python scripts/specnovel.py compile --format epub [--locale fr-FR] [--pdf-engine weasyprint]` |
 | `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
 
 ---

@@ -232,6 +232,106 @@ Ensures visual cohesion across multiple assets:
 -->
 - **Continuity:** Maintain identical nautical symbol keys, compass rose designs, and line-weight hierarchy across all map assets.
 
+## Publication & Book Design Guidelines
+<!-- 
+Parameters, editorial conventions, and artistic choices governing the compilation and publishing
+of the novel into EPUB, PDF, and print deliverables via the novel-publish skill.
+-->
+
+### Format and Delivery Targets
+<!-- 
+Deliverables to produce upon publication:
+- Formats: epub, pdf (also docx, md)
+- Cover Asset: Path to cover art image (e.g. graphics/cover.png or [[GFX-001]])
+-->
+- **Formats:** epub, pdf
+- **Cover Asset:** graphics/cover.png
+
+### Page Layout & Trim Size (PDF & Print)
+<!-- 
+Page geometry and margins for print-on-demand (POD) and reading editions:
+- Trim Size:
+  - 5in x 8in (compact novella / mass market)
+  - 5.5in x 8.5in (recommended standard trade paperback)
+  - 6in x 9in (popular trade paperback / hardcover)
+  - A5 (148mm x 210mm international standard)
+- Margins:
+  - Inner / Gutter Margin: 0.75in (19mm) - accommodates page binding thickness
+  - Outer Margin: 0.5in (12.7mm)
+  - Top Margin: 0.75in (19mm)
+  - Bottom Margin: 0.75in (19mm)
+- Chapter Openings:
+  - 'recto': Chapters always start on right-hand page (standard trade publishing)
+  - 'next': Chapters start on next page regardless of left/right
+- Running Headers:
+  - 'recto-verso': Author on left/verso, book title or chapter on right/recto
+  - 'none': Suppress running headers
+-->
+- **Trim Size:** 5.5in x 8.5in
+- **Inner Margin:** 0.75in
+- **Outer Margin:** 0.5in
+- **Top Margin:** 0.75in
+- **Bottom Margin:** 0.75in
+- **Chapter Openings:** recto
+- **Running Headers:** recto-verso
+
+### Interior Typography & Typesetting
+<!-- 
+Typeface selection, hierarchy, and micro-typography:
+- Body Font: Classical book serif (e.g. EB Garamond, Baskerville, Caslon, Minion Pro, Sabon)
+- Heading Font: Elegant display serif or clean titling sans (e.g. Cinzel, Playfair Display, EB Garamond)
+- Font Size: 10.5pt or 11pt (standard trade book reading density)
+- Line Height: 1.35 to 1.4 ratio (14pt to 15pt leading)
+- Paragraph Indent: 1.25em (first-line indent for narrative prose)
+- Scene Break Ornament: Divider glyph between scene beats (e.g. '* * *', '❦', '✦', or '---')
+- Drop Caps: true (2-line or 3-line initial cap at chapter opening)
+- Justification: true (fully justified prose)
+- Hyphenation: true (automatic hyphenation for even word spacing in print/PDF)
+-->
+- **Body Font:** EB Garamond
+- **Heading Font:** Cinzel
+- **Font Size:** 11pt
+- **Line Height:** 1.35
+- **Paragraph Indent:** 1.25em
+- **Scene Break:** * * *
+- **Drop Caps:** true
+- **Justification:** true
+- **Hyphenation:** true
+
+### EPUB & E-Reader Specifications
+<!-- 
+Formatting parameters specific to digital reading devices (Kindle, Kobo, Apple Books):
+- Reflowable: true (dynamic reflowable layout conforming to reader font sizing)
+- TOC Depth: 2 (Parts + Chapters in navigation; scene headings omitted from reader TOC)
+- Dark Mode Support: true (semantic CSS variables, no hardcoded background colors)
+- Max Image Width: 1200px (balanced resolution vs distributor file size caps)
+-->
+- **Reflowable:** true
+- **TOC Depth:** 2
+- **Dark Mode Support:** true
+- **Max Image Width:** 1200px
+
+### Editorial Front & Back Matter Sequence
+<!-- 
+Canonical running order for the published volume:
+Front Matter:
+  1. Half-title page
+  2. Frontispiece plate
+  3. Title page
+  4. Copyright page
+  5. Dedication / Epigraph
+  6. Table of Contents
+  7. Foreword (if enabled)
+Body:
+  - Parts and Chapters in reading order
+Back Matter:
+  1. Historical Note / Author's Note
+  2. Glossary (if enabled)
+  3. Bibliography (DAG-filtered facts, if enabled)
+  4. Acknowledgements (verbatim from acknowledgements.md)
+  5. About the Author & Colophon
+-->
+
 # Locale: en-US
 <!-- Specific conventions for en-US:
      - American English spelling and punctuation (serial commas, double quotes)

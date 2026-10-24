@@ -1384,6 +1384,8 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Glossary Guidelines' section for automated term discovery")
         if not re.search(r"^#{1,3}\s+(?:Graphics|Visual\s+Assets?)\s+(?:Guidelines|Rules|Style)?\b", style_text, re.I | re.M):
             warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Graphics Guidelines' section to govern visual asset usage, intensity, and rendering styles")
+        if not re.search(r"^#{1,3}\s+Publication(?:\s+&|\s+and)?\s+(?:Book\s+Design\s+)?Guidelines\b", style_text, re.I | re.M):
+            warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Publication & Book Design Guidelines' section (defines trim size, typography, margins, and EPUB/PDF styling)")
 
     # catalog integrity
     errors += [f"duplicate ID {d['id']}: {d['first']} and {d['second']}" for d in plan.duplicates]
@@ -2501,6 +2503,191 @@ def cmd_bibliography(git: Git, args) -> int:
     return 0
 
 
+def parse_publication_style(style_text: str) -> dict:
+    """Extract publication, typography, and book design specifications from story/style.md."""
+    config = {
+        "formats": ["epub", "pdf"],
+        "trim_size": "5.5in x 8.5in",
+        "inner_margin": "0.75in",
+        "outer_margin": "0.5in",
+        "top_margin": "0.75in",
+        "bottom_margin": "0.75in",
+        "body_font": "EB Garamond",
+        "heading_font": "Cinzel",
+        "font_size": "11pt",
+        "line_height": "1.35",
+        "paragraph_indent": "1.25em",
+        "scene_break": "* * *",
+        "chapter_openings": "recto",
+        "drop_caps": True,
+        "toc_depth": 2,
+        "cover_asset": None,
+        "hyphenation": True,
+        "justification": True,
+        "running_headers": "recto-verso",
+    }
+    if not style_text:
+        return config
+
+    m_sec = re.search(
+        r"^#{1,3}\s+Publication(?:\s+&|\s+and)?\s+(?:Book\s+Design\s+)?Guidelines\b.*?(?=\n#{1,2}\s+|\Z)",
+        style_text,
+        re.I | re.M | re.S,
+    )
+    target_text = m_sec.group(0) if m_sec else style_text
+
+    field_map = {
+        "trim_size": r"(?:trim[-_\s]*size|paper[-_\s]*size|page[-_\s]*size)",
+        "inner_margin": r"(?:inner[-_\s]*margin|gutter(?:[-_\s]*margin)?)",
+        "outer_margin": r"outer[-_\s]*margin",
+        "top_margin": r"top[-_\s]*margin",
+        "bottom_margin": r"bottom[-_\s]*margin",
+        "body_font": r"(?:body[-_\s]*font(?:[-_\s]*family)?|main[-_\s]*font)",
+        "heading_font": r"(?:heading[-_\s]*font(?:[-_\s]*family)?|display[-_\s]*font)",
+        "font_size": r"(?:font[-_\s]*size|body[-_\s]*size|base[-_\s]*size)",
+        "line_height": r"(?:line[-_\s]*height|leading|linestretch)",
+        "paragraph_indent": r"(?:paragraph[-_\s]*indent|first[-_\s]*line[-_\s]*indent|indent)",
+        "scene_break": r"(?:scene[-_\s]*break(?:[-_\s]*ornament)?|divider(?:[-_\s]*glyph)?)",
+        "chapter_openings": r"(?:chapter[-_\s]*openings?|opening[-_\s]*pages?)",
+        "drop_caps": r"(?:drop[-_\s]*caps?|initial[-_\s]*caps?)",
+        "toc_depth": r"(?:toc[-_\s]*depth|table[-_\s]*of[-_\s]*contents[-_\s]*depth)",
+        "cover_asset": r"(?:cover(?:[-_\s]*asset|[-_\s]*image|[-_\s]*file)?)",
+        "hyphenation": r"hyphenation",
+        "justification": r"(?:justification|text[-_\s]*alignment)",
+        "running_headers": r"(?:running[-_\s]*headers?(?:[-_\s]*&[-_\s]*footers?)?|headers?)",
+    }
+
+    for key, pattern in field_map.items():
+        m = re.search(r"[-*]\s*\**" + pattern + r"(?:\**\s*:|\s*:\**)\s*([^\n#<]+)", target_text, re.I)
+        if m:
+            val = re.sub(r"^\**|\**$", "", m.group(1)).strip()
+            if key in ("drop_caps", "hyphenation", "justification"):
+                config[key] = val.lower() in ("true", "yes", "1", "enabled", "on", "3 lines", "2 lines")
+            elif key == "toc_depth":
+                try:
+                    config[key] = int(re.search(r"\d+", val).group(0))
+                except Exception:
+                    pass
+            elif key == "cover_asset":
+                clean_cov = re.sub(r"[\[\]]", "", val).strip()
+                if clean_cov.lower() not in ("none", "null", "false"):
+                    config[key] = clean_cov
+            elif key == "formats":
+                config[key] = [f.strip().lower() for f in val.split(",") if f.strip()]
+            else:
+                config[key] = val
+
+    m_marg = re.search(r"[-*]\s*\**margins?\**(?:\**\s*:|\s*:\**)\s*([^\n#<]+)", target_text, re.I)
+    if m_marg:
+        val = re.sub(r"^\**|\**$", "", m_marg.group(1)).strip()
+        parts = [p.strip() for p in val.split(",")]
+        if len(parts) == 4:
+            config["top_margin"], config["bottom_margin"], config["inner_margin"], config["outer_margin"] = parts
+
+    return config
+
+
+def generate_epub_css(pub_conf: dict) -> str:
+    """Generate modern, accessible EPUB stylesheet customized from publication guidelines."""
+    body_font = pub_conf.get("body_font", "EB Garamond")
+    heading_font = pub_conf.get("heading_font", "Cinzel")
+    line_height = pub_conf.get("line_height", "1.35")
+    indent = pub_conf.get("paragraph_indent", "1.25em")
+    justified = "justify" if pub_conf.get("justification", True) else "left"
+    hyphens = "auto" if pub_conf.get("hyphenation", True) else "manual"
+
+    return f"""/* SpecNovelist EPUB Stylesheet - Generated from story/style.md */
+@charset "utf-8";
+
+body {{
+    margin: 5% 5%;
+    padding: 0;
+    font-family: "{body_font}", "Georgia", serif;
+    line-height: {line_height};
+    text-align: {justified};
+    -webkit-hyphens: {hyphens};
+    -moz-hyphens: {hyphens};
+    -ms-hyphens: {hyphens};
+    hyphens: {hyphens};
+}}
+
+/* Paragraph formatting */
+p {{
+    margin: 0;
+    text-indent: {indent};
+}}
+
+/* Unindented first paragraphs */
+h1 + p, h2 + p, h3 + p, hr + p, .scene-break + p {{
+    text-indent: 0;
+}}
+
+/* Headings */
+h1, h2, h3, h4 {{
+    font-family: "{heading_font}", "{body_font}", serif;
+    font-weight: normal;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}}
+
+h1 {{
+    margin-top: 3em;
+    margin-bottom: 1.5em;
+    font-size: 1.8em;
+    page-break-before: always;
+    break-before: page;
+}}
+
+h2 {{
+    margin-top: 2.5em;
+    margin-bottom: 1.2em;
+    font-size: 1.4em;
+    page-break-before: always;
+    break-before: page;
+}}
+
+h3 {{
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+    font-size: 1.15em;
+}}
+
+/* Scene breaks */
+.scene-break, hr {{
+    border: none;
+    text-align: center;
+    margin: 1.8em auto;
+    letter-spacing: 0.25em;
+    color: inherit;
+    font-size: 1em;
+}}
+
+/* Figures and Illustrations */
+figure, img {{
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.5em auto;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}}
+
+figcaption {{
+    font-size: 0.85em;
+    font-style: italic;
+    text-align: center;
+    margin-top: 0.5em;
+}}
+
+/* Front and Back matter */
+.foreword, .glossary, .bibliography, .acknowledgements {{
+    page-break-before: always;
+    break-before: page;
+}}
+"""
+
+
 def cmd_compile(git: Git, args) -> int:
     p = load_project(git)
     target_locale = getattr(args, "locale", None) or p.config.primary_language
@@ -2509,7 +2696,71 @@ def cmd_compile(git: Git, args) -> int:
     else:
         d = p.layers[args.layer]
     title = project_title(git)
-    out = ["---", f"title: \"{title}\"", "---", ""]
+
+    # Load publication and interior design guidelines from story/style.md
+    style_p = git.root / STYLE_FILE
+    style_text = style_p.read_text(encoding="utf-8", errors="replace") if style_p.is_file() else ""
+    pub_conf = parse_publication_style(style_text)
+
+    # Resolve scene break ornament
+    scene_break = args.scene_break
+    if scene_break == "* * *" and pub_conf.get("scene_break"):
+        scene_break = pub_conf["scene_break"]
+
+    # Resolve cover asset
+    cover_file = None
+    if getattr(args, "cover", None):
+        c_cand = git.root / args.cover
+        if c_cand.is_file():
+            cover_file = c_cand
+    elif pub_conf.get("cover_asset"):
+        c_cand = git.root / pub_conf["cover_asset"]
+        if c_cand.is_file():
+            cover_file = c_cand
+    if not cover_file:
+        for loc_cand in (f"graphics/cover.{target_locale}.png", "graphics/cover.png", "graphics/cover.jpg"):
+            c_cand = git.root / loc_cand
+            if c_cand.is_file():
+                cover_file = c_cand
+                break
+
+    # Construct rich metadata YAML front matter
+    author_name = p.config.author_name or p.config.author_legal_name or ""
+    out = ["---"]
+    out.append(f"title: \"{title}\"")
+    if p.config.subtitle:
+        out.append(f"subtitle: \"{p.config.subtitle}\"")
+    if author_name:
+        out.append(f"author: \"{author_name}\"")
+    out.append(f"lang: \"{target_locale}\"")
+    out.append("documentclass: book")
+    out.append("toc: true")
+    out.append(f"toc-depth: {pub_conf.get('toc_depth', 2)}")
+
+    # Geometry & typography for PDF
+    trim = pub_conf.get("trim_size", "5.5in x 8.5in")
+    trim_m = re.match(r"([\d\.]+(?:in|mm|cm|pt))\s*[xX*,\s]\s*([\d\.]+(?:in|mm|cm|pt))", trim)
+    geom = []
+    if trim_m:
+        geom.append(f"paperwidth={trim_m.group(1)}")
+        geom.append(f"paperheight={trim_m.group(2)}")
+    elif trim.lower() in ("a5", "a4", "b6"):
+        out.append(f"papersize: {trim.lower()}")
+
+    geom.append(f"inner={pub_conf.get('inner_margin', '0.75in')}")
+    geom.append(f"outer={pub_conf.get('outer_margin', '0.5in')}")
+    geom.append(f"top={pub_conf.get('top_margin', '0.75in')}")
+    geom.append(f"bottom={pub_conf.get('bottom_margin', '0.75in')}")
+    out.append("geometry:")
+    for g in geom:
+        out.append(f"  - {g}")
+    out.append(f"fontsize: {pub_conf.get('font_size', '11pt')}")
+    out.append(f"mainfont: \"{pub_conf.get('body_font', 'EB Garamond')}\"")
+    out.append(f"linestretch: {pub_conf.get('line_height', '1.35')}")
+    if cover_file:
+        out.append(f"cover-image: \"{cover_file.relative_to(git.root).as_posix()}\"")
+    out.append("---")
+    out.append("")
 
     # Optional Foreword
     if p.config.foreword_path:
@@ -2537,7 +2788,7 @@ def cmd_compile(git: Git, args) -> int:
                 out += pre + [""]
         for i, sid in enumerate(sids):
             if i:
-                out += [args.scene_break, ""]
+                out += [scene_break, ""]
             out += clean_prose(d.scenes[sid].body) + [""]
 
     # Optional Glossary
@@ -2581,13 +2832,44 @@ def cmd_compile(git: Git, args) -> int:
     print(f"Wrote {md.relative_to(git.root).as_posix()} ({words:,} words)")
     if missing:
         print(f"Note: {len(missing)} outline scene(s) not yet written in {args.layer}/ were skipped.")
+
+    # Generate companion EPUB stylesheet
+    css_content = generate_epub_css(pub_conf)
+    css_path = dst_dir / "epub.css"
+    css_path.write_text(css_content, encoding="utf-8")
+
     if args.format != "md":
         pandoc = shutil.which("pandoc")
         if not pandoc:
-            raise NovelError("pandoc is required for --format " + args.format + " (https://pandoc.org)")
+            raise NovelError(
+                f"pandoc is required for --format {args.format} (https://pandoc.org)\n"
+                f"Compiled Markdown source written to: {md.relative_to(git.root).as_posix()}\n"
+                f"Generated EPUB stylesheet written to: {css_path.relative_to(git.root).as_posix()}"
+            )
         dst = dst_dir / f"{args.layer}{suffix}.{args.format}"
-        subprocess.run([pandoc, str(md), "-o", str(dst)], check=True)
-        print(f"Wrote {dst.relative_to(git.root).as_posix()}")
+        cmd = [pandoc, str(md), "-o", str(dst)]
+        if args.format == "epub":
+            custom_css = getattr(args, "css", None)
+            use_css = (git.root / custom_css) if custom_css else css_path
+            if use_css.is_file():
+                cmd.extend(["--css", str(use_css)])
+            if cover_file and cover_file.is_file():
+                cmd.extend(["--epub-cover-image", str(cover_file)])
+            cmd.extend(["--toc", f"--toc-depth={pub_conf.get('toc_depth', 2)}"])
+        elif args.format == "pdf":
+            engine = getattr(args, "pdf_engine", None)
+            if not engine:
+                for cand in ("xelatex", "lualatex", "pdflatex", "weasyprint", "typst"):
+                    if shutil.which(cand):
+                        engine = cand
+                        break
+            if engine:
+                cmd.extend([f"--pdf-engine={engine}"])
+        try:
+            subprocess.run(cmd, check=True)
+            print(f"Wrote {dst.relative_to(git.root).as_posix()}")
+        except subprocess.CalledProcessError as e:
+            raise NovelError(f"pandoc conversion to {args.format} failed (exit code {e.returncode}). Check LaTeX/PDF engine installation.")
     return 0
 
 
@@ -2896,6 +3178,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                            help="format; fields {n} (1), {N} (One), {title}")
             p.add_argument("--part-heading", default="Part {N}: {title}")
             p.add_argument("--scene-break", default="* * *")
+            p.add_argument("--cover", help="custom cover image path (default: auto-detect from graphics/ or config)")
+            p.add_argument("--css", help="custom CSS stylesheet for EPUB/HTML")
+            p.add_argument("--pdf-engine", help="PDF engine for pandoc (e.g. xelatex, pdflatex, weasyprint, typst)")
     args = ap.parse_args(argv)
     if not args.command:
         args.command, args.json = "status", False
