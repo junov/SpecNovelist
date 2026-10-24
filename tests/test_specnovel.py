@@ -1239,6 +1239,30 @@ Elena opens the letter.
         self.assertEqual(code, 0)
         self.assertFalse(take_file.exists())
 
+    def test_audit_report_generation(self):
+        # Generate analysis report using specnovel audit --report --output reports/analysis.md
+        code, out = self.run_cli("audit", "--report", "--output", "reports/analysis.md")
+        self.assertEqual(code, 0)
+        self.assertIn("Generated analysis report: reports/analysis.md", out)
+
+        rep_file = self.root / "reports" / "analysis.md"
+        self.assertTrue(rep_file.is_file())
+        rep_txt = rep_file.read_text(encoding="utf-8")
+
+        # Verify key sections
+        self.assertIn("# Developmental Editorial & Style Analysis Report", rep_txt)
+        self.assertIn("## 1. Executive Metrics Dashboard", rep_txt)
+        self.assertIn("## 2. Raw Quality Indicators Audit", rep_txt)
+        self.assertIn("## 3. Style-Reflective Metrics vs. `story/style.md` Compliance", rep_txt)
+        self.assertIn("## 4. Cross-Chapter Style Consistency", rep_txt)
+        self.assertIn("## 5. Multi-Level Zoom-In on Critical Areas", rep_txt)
+        self.assertIn("## 6. Actionable Editorial Roadmap", rep_txt)
+
+        # Verify wiki-links
+        self.assertIn("[[SCN-001]]", rep_txt)
+        self.assertIn("[[CHP-001]]", rep_txt)
+        self.assertIn("[[CHR-001]]", rep_txt)
+
 
 if __name__ == "__main__":
     unittest.main()

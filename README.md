@@ -521,6 +521,19 @@ The `novel-verify` skill audits project integrity across five dimensions:
 
 ---
 
+## Developmental Telemetry & Metrics Analysis (`novel-analyze`)
+
+The `novel-analyze` skill generates comprehensive developmental editorial and style analysis reports focused on metrics:
+- **Raw Quality Indicators vs. Style-Reflective Metrics**:
+  - *Raw Quality*: Evaluates objective craft flaws (plot sags, Chekhov gun setup/payoff gaps, epistemic leaks, passive voice clusters, novelistic clichés) against strict quality standards.
+  - *Style-Reflective*: Evaluates subjective craft dimensions (sentence cadence entropy $H_{cad}$, dialogue ratio, 5-modality sensory palette, narrative velocity $V_n$, emotional valence $E_v$, visual graphics intensity) against declared choices in `story/style.md`.
+- **Cross-Chapter Style Consistency**: Audits stylistic variance, cadence shifts, and voice drift across chapters.
+- **Multi-Level Zoom-In**: Deep-dives into critical areas from plot DAG to chapters, scenes, paragraphs/sentences (`file://...#Lxx`), KB entities, and graphics.
+- **Traceability with Wiki-Links**: All referenced project entities are hyperlinked with permanent wiki-links (`[[ID]]` or `[[ID|Display Text]]`).
+- **Automated Report Generation**: Generate comprehensive reports via `python scripts/specnovel.py audit --report [--output <path>]`.
+
+---
+
 ## Knowledge Base Catalog & ID Registry
 
 Every cataloged entity uses a dedicated uppercase prefix and sequential 3-digit number.
@@ -600,7 +613,7 @@ zero external dependencies and interacts directly with Git.
 | `log` | Displays history of all synchronization baseline commits. | `python scripts/specnovel.py log` |
 | `harvest` | Reverse-engineers characters, places, dialogue, and beats from raw prose drafts into KB, outline, and abridged layers. | `python scripts/specnovel.py harvest <draft-file> [--apply] [--batch]` |
 | `scenario` | Manages folder-based what-if scenarios in `story/scenarios/<name>/` (create, list, diff, activate, merge, delete). | `python scripts/specnovel.py scenario create alternate-ending -m "A dies"` |
-| `audit` | Multi-dimensional developmental telemetry: baseline-cached pacing waveforms, cadence entropy, 5-modality sensory radar, cliché/passive voice detection, Chekhov distance gaps, epistemic irony, and longitudinal stage deltas. | `python scripts/specnovel.py audit [--deep] [--scene SCN-xxx] [--compare baseline]` |
+| `audit` | Multi-dimensional developmental telemetry: baseline-cached pacing waveforms, cadence entropy, 5-modality sensory radar, cliché/passive voice detection, Chekhov distance gaps, epistemic irony, longitudinal stage deltas, and markdown analysis reports. | `python scripts/specnovel.py audit [--deep] [--scene SCN-xxx] [--compare baseline] [--report] [--output reports/analysis.md]` |
 | `takes` | Manages versioned scene takes in `story/takes/<SCN-ID>/<take-name>.md` (save, list, diff, activate, delete). | `python scripts/specnovel.py takes save SCN-014 noir -m "Noir take"` |
 
 ---

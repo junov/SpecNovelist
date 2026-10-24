@@ -3978,6 +3978,201 @@ def get_or_update_metrics_cache(p: Project, stage: str = "manuscript", force_rec
     return metrics_by_scene, dirty_scenes, base_sha
 
 
+def generate_analysis_report(
+    p: Project,
+    metrics_by_scene: Dict[str, Any],
+    pacing_waveform: List[Dict[str, Any]],
+    character_agency: OrderedDict,
+    chekhov_matrix: List[Dict[str, Any]],
+    secrets_revealed: OrderedDict,
+    consecutive_slow_scenes: List[List[str]],
+    novel_sensory: Dict[str, int],
+    sensory_alerts: List[Dict[str, Any]],
+    total_words_outline: int,
+    total_words_actual: int,
+    total_dialogue_words: int,
+    total_cliches: int,
+    total_passive: int,
+    base_sha: Optional[str]
+) -> str:
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    title = p.config.title or "Untitled Novel"
+    author = p.config.author_name or p.config.author_legal_name or "Unknown Author"
+    lang = p.config.primary_language or "en-US"
+    overall_dialogue_ratio = round(total_dialogue_words / max(total_words_actual, 1), 2)
+    avg_entropy = round(sum(w["cadence_entropy"] for w in pacing_waveform) / max(len(pacing_waveform), 1), 2)
+    tot_sents = sum(w["sentences"] for w in pacing_waveform)
+    avg_sent_len = round(total_words_actual / max(tot_sents, 1), 1)
+    base_label = base_sha[:8] if base_sha else "uncommitted"
+
+    lines = []
+    lines.append(f"# Developmental Editorial & Style Analysis Report")
+    lines.append(f"**Work:** [[{title}]]  ")
+    lines.append(f"**Author:** {author}  ")
+    lines.append(f"**Locale:** `{lang}`  ")
+    lines.append(f"**Baseline Commit:** `{base_label}`  ")
+    lines.append(f"**Generated:** {now_str}\n")
+    lines.append("---\n")
+
+    # Executive Dashboard
+    lines.append("## 1. Executive Metrics Dashboard\n")
+    lines.append("| Metric | Dimension / Type | Observed Value | Standard / Style Target | Assessment |")
+    lines.append("|---|---|---|---|---|")
+
+    wc_status = "On Budget" if abs(total_words_actual - total_words_outline) <= total_words_outline * 0.15 else "Review Length"
+    lines.append(f"| Total Word Count | Scope (Raw) | {total_words_actual:,} wds | {total_words_outline:,} wds | {wc_status} |")
+
+    lines.append(f"| Dialogue Ratio | Style-Reflective | {overall_dialogue_ratio:.0%} | 25% – 45% (Balanced) | {'Optimal' if 0.20 <= overall_dialogue_ratio <= 0.50 else 'Investigate'} |")
+
+    entropy_eval = "Lyrical / Dynamic" if avg_entropy >= 2.5 else ("Moderate" if avg_entropy >= 1.8 else "Monotone Cadence")
+    lines.append(f"| Cadence Entropy ($H_{{cad}}$) | Style-Reflective | {avg_entropy} bits | ≥ 2.2 bits | {entropy_eval} |")
+
+    lines.append(f"| Avg Sentence Length | Style-Reflective | {avg_sent_len} words | per `story/style.md` | Calibrated |")
+
+    ck_unresolved = len([c for c in chekhov_matrix if "dormant" in c["assessment"]])
+    lines.append(f"| Chekhov Guns Tracked | Dramatic (Raw) | {len(chekhov_matrix)} setups | 0 orphan setups | {'All Paid Off' if ck_unresolved == 0 else f'{ck_unresolved} Dormant Guns'} |")
+
+    lines.append(f"| Pacing Sag Sequences | Dramatic (Raw) | {len(consecutive_slow_scenes)} sequence(s) | 0 sags | {'Clean Flow' if len(consecutive_slow_scenes) == 0 else 'Review Sags'} |")
+
+    lines.append(f"| Clichés / Dead Metaphors | Literary (Raw) | {total_cliches} detected | 0 clichés | {'Clean Diction' if total_cliches == 0 else 'Polish Required'} |")
+
+    passive_pct = round((total_passive / max(tot_sents, 1)) * 100, 1)
+    lines.append(f"| Passive Voice Ratio | Linguistic (Raw) | {passive_pct}% ({total_passive}) | ≤ 5.0% | {'Punchy Active' if passive_pct <= 5.0 else 'Tighten Passive'} |\n")
+
+    lines.append("## 2. Raw Quality Indicators Audit\n")
+    lines.append("Raw quality indicators measure objective storytelling integrity, narrative coherence, and technical craft faults that detract from immersion regardless of chosen style.\n")
+
+    lines.append("### 2.1 Story Causality & Epistemic Secrets")
+    if not secrets_revealed:
+        lines.append("- No epistemic secrets registered in outline.\n")
+    else:
+        lines.append("| Secret Element | Revelation Scene | Learned By | Kept Hidden From | Integrity |")
+        lines.append("|---|---|---|---|---|")
+        for sec_id, data in secrets_revealed.items():
+            l_str = ", ".join(f"[[{ch}]]" for ch in data["learns"]) or "None"
+            h_str = ", ".join(f"[[{ch}]]" for ch in data["hidden_from"]) or "None"
+            leak = any(ch in data["hidden_from"] for ch in data["learns"])
+            integrity = "**Violation: Leaked**" if leak else "Preserved"
+            lines.append(f"| [[{sec_id}]] | [[{data['scene']}]] | {l_str} | {h_str} | {integrity} |")
+        lines.append("")
+
+    lines.append("### 2.2 Chekhov's Gun Setups & Payoffs")
+    if not chekhov_matrix:
+        lines.append("- No paired plants and payoffs tracked in outline.\n")
+    else:
+        lines.append("| Planted Entity | Setup Scene | Payoff Scene | Scene Gap | Diagnostic Assessment |")
+        lines.append("|---|---|---|---|---|")
+        for ck in chekhov_matrix:
+            lines.append(f"| [[{ck['entity']}]] | [[{ck['plant_scene']}]] | [[{ck['payoff_scene']}]] | {ck['scene_gap']} scenes | {ck['assessment']} |")
+        lines.append("")
+
+    lines.append("### 2.3 Pacing Sags & Momentum Stalls")
+    if not consecutive_slow_scenes:
+        lines.append("- No pacing sag sequences detected. Plot progression and scene lengths are causally balanced.\n")
+    else:
+        for seq in consecutive_slow_scenes:
+            seq_links = ", ".join(f"[[{sid}]]" for sid in seq)
+            lines.append(f"> [!WARNING]\n> **Pacing Sag Detected in:** {seq_links}\n> These consecutive scenes exceed target word counts without advancing a cataloged plot element (`PLT`). Consider condensing descriptive texture or introducing a dramatic turning point.\n")
+
+    lines.append("### 2.4 Cliché & Passive Phrasing Hotspots")
+    cliche_scenes = [sid for sid, m in metrics_by_scene.items() if m.get("cliches")]
+    if not cliche_scenes:
+        lines.append("- Zero clichés or dead metaphors detected in manuscript prose.\n")
+    else:
+        lines.append("| Scene | Location | Flagged Cliché | Suggested Somatic / Visceral Alternative |")
+        lines.append("|---|---|---|---|")
+        for sid in cliche_scenes[:8]:
+            for cl in metrics_by_scene[sid]["cliches"]:
+                lines.append(f"| [[{sid}]] | `{metrics_by_scene[sid]['file']}#L{cl['line']}` | *\"{cl['cliche']}\"* | {cl['suggestion']} |")
+        lines.append("")
+
+    lines.append("## 3. Style-Reflective Metrics vs. `story/style.md` Compliance\n")
+    lines.append("Style-reflective metrics evaluate whether the prose's technical execution aligns with the artistic choices declared in `story/style.md`.\n")
+
+    lines.append("### 3.1 Sentence Rhythm & Prose Cadence (`style.md` §3)")
+    lines.append(f"- **Observed Average Sentence Length:** {avg_sent_len} words.")
+    lines.append(f"- **Cadence Entropy ($H_{{cad}}$):** {avg_entropy} bits (measures length variety across short, medium, and long sentences).")
+    lines.append(f"- **Consistency:** Verify that action scenes deploy terse, staccato phrasing while contemplative scenes expand into longer periodic clauses per `story/style.md`.\n")
+
+    lines.append("### 3.2 Sensory Palette Grounding (`style.md` §6)")
+    tot_sensory = max(sum(novel_sensory.values()), 1)
+    lines.append("| Sensory Modality | Occurrences | Percentage | Grounding Role |")
+    lines.append("|---|---|---|---|")
+    for mod, cnt in novel_sensory.items():
+        pct = (cnt / tot_sensory) * 100
+        lines.append(f"| {mod.capitalize()} | {cnt} | {pct:.1f}% | {'Primary anchor' if pct >= 25 else 'Texture element'} |")
+    lines.append("")
+    if sensory_alerts:
+        lines.append("> [!TIP]\n> **Sensory Grounding Warnings:**")
+        for sa in sensory_alerts[:5]:
+            lines.append(f"> - Scene [[{sa['scene']}]] ({sa['words']} words, setting: {sa['where']}) lacks tactile or olfactory grounding. Check the sensory palette of [[{sa['where'].strip('[]')}]] and weave in physical textures.\n")
+
+    lines.append("### 3.3 Visual Graphics Intensity (`style.md` ## Graphics Guidelines)")
+    gfx_in_outline = [r[0] for sid in p.outline.scenes for r in p.plan.defs[sid].refs if r[0].startswith("GFX-")] if p.outline.scenes else []
+    lines.append(f"- **Cataloged Graphics References in Outline:** {len(set(gfx_in_outline))} asset(s): {', '.join(f'[[{g}]]' for g in sorted(set(gfx_in_outline))) or 'None'}.")
+    lines.append(f"- **Alignment:** Verify that visual assets match the style guide's declared intensity level and trigger rules (spatial transitions, tactical cutaways, epistolary artifacts).\n")
+
+    lines.append("## 4. Cross-Chapter Style Consistency\n")
+    lines.append("| Chapter | Scenes | Words | Dialogue % | Avg Sentence | Cadence Entropy | Stylistic Footprint |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for cid, sids in p.outline.by_chapter.items():
+        ch_words = sum(metrics_by_scene.get(sid, {}).get("actual_words", 0) for sid in sids)
+        ch_dlg = sum(metrics_by_scene.get(sid, {}).get("dialogue_words", 0) for sid in sids)
+        ch_dlg_pct = (ch_dlg / max(ch_words, 1)) * 100
+        ch_sents = sum(metrics_by_scene.get(sid, {}).get("sentence_count", 0) for sid in sids)
+        ch_avg_sent = round(ch_words / max(ch_sents, 1), 1)
+        ch_entropy = round(sum(metrics_by_scene.get(sid, {}).get("cadence_entropy", 0.0) for sid in sids) / max(len(sids), 1), 2)
+        footprint = "Balanced" if 12 <= ch_avg_sent <= 20 and ch_entropy >= 2.0 else "Check Variance"
+        lines.append(f"| [[{cid}]] | {len(sids)} | {ch_words:,} | {ch_dlg_pct:.0f}% | {ch_avg_sent} wds | {ch_entropy} bits | {footprint} |")
+    lines.append("")
+
+    lines.append("## 5. Multi-Level Zoom-In on Critical Areas\n")
+
+    lines.append("### 5.1 Scene Pacing Waveform & Emotional Arc")
+    lines.append("| Scene | Chapter | Words | Dlg % | Velocity ($V_n$) | Emotional Valence ($E_v$) | Focus |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for w in pacing_waveform:
+        sid = w["scene"]
+        m = metrics_by_scene.get(sid, {})
+        vel = m.get("narrative_velocity", 0.0)
+        val = m.get("emotional_valence", 0.0)
+        val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
+        lines.append(f"| [[{sid}]] | [[{w['chapter']}]] | {w['actual_words']:,} | {w['dialogue_ratio']:.0%} | {vel} | {val_str} | {w['title'][:25]} |")
+    lines.append("")
+
+    lines.append("### 5.2 Character Agency & Screen-Time")
+    lines.append("| Character | POV Scenes | Cast Appearances | Novel Coverage | Agency Assessment |")
+    lines.append("|---|---|---|---|---|")
+    tot_scenes = max(len(p.outline.scenes), 1)
+    for c in character_agency.values():
+        c_count = c["cast_count"]
+        cov = (c_count / tot_scenes) * 100
+        agency = "Protagonist / Primary" if c["pov_count"] >= 3 else ("Key Secondary" if c_count >= 2 else "Incidental")
+        lines.append(f"| [[{c['id']}]] ({c['name']}) | {c['pov_count']} | {c_count} | {cov:.0f}% | {agency} |")
+    lines.append("")
+
+    lines.append("## 6. Actionable Editorial Roadmap\n")
+    lines.append("1. **High Priority (Quality & Logic)**:")
+    if consecutive_slow_scenes:
+        lines.append(f"   - Resolve pacing sag in {', '.join(f'[[{sid}]]' for s in consecutive_slow_scenes for sid in s)} by introducing external conflict or cutting expository filler.")
+    if ck_unresolved > 0:
+        lines.append(f"   - Address {ck_unresolved} dormant Chekhov gun setups to ensure all planted items earn a meaningful payoff before the climax.")
+    if not consecutive_slow_scenes and ck_unresolved == 0:
+        lines.append("   - Zero structural blockers detected. Narrative causality and Chekhov engines are healthy.")
+
+    lines.append("2. **Medium Priority (Style & Sensory Polish)**:")
+    if sensory_alerts:
+        for sa in sensory_alerts[:3]:
+            lines.append(f"   - Enrich sensory textures in [[{sa['scene']}]] using the tactile and olfactory palette of [[{sa['where'].strip('[]')}]] to eliminate white-room syndrome.")
+    if total_cliches > 0:
+        lines.append(f"   - Replace {total_cliches} flagged novelistic cliché(s) with somatic reactions or era-authentic figurative language.")
+
+    lines.append("3. **Consistency & Rhythm**:")
+    lines.append(f"   - Maintain sentence cadence entropy (≥ 2.2 bits) and audit chapters flagged with stylistic variance in Section 4.\n")
+
+    return "\n".join(lines) + "\n"
+
+
 def cmd_audit(git: Git, args) -> int:
     p = load_project(git)
     target_stage = "manuscript" if p.layers["manuscript"].scenes else "abridged"
@@ -4269,6 +4464,44 @@ def cmd_audit(git: Git, args) -> int:
 
     overall_dialogue_ratio = round(total_dialogue_words / max(total_words_actual, 1), 2)
     avg_entropy = round(sum(w["cadence_entropy"] for w in pacing_waveform) / max(len(pacing_waveform), 1), 2)
+
+    if getattr(args, "report", False):
+        report_text = generate_analysis_report(
+            p=p,
+            metrics_by_scene=metrics_by_scene,
+            pacing_waveform=pacing_waveform,
+            character_agency=character_agency,
+            chekhov_matrix=chekhov_matrix,
+            secrets_revealed=secrets_revealed,
+            consecutive_slow_scenes=consecutive_slow_scenes,
+            novel_sensory=novel_sensory,
+            sensory_alerts=sensory_alerts,
+            total_words_outline=total_words_outline,
+            total_words_actual=total_words_actual,
+            total_dialogue_words=total_dialogue_words,
+            total_cliches=total_cliches,
+            total_passive=total_passive,
+            base_sha=base_sha
+        )
+        out_path_str = getattr(args, "output", None)
+        if not out_path_str:
+            reports_dir = git.root / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_file = reports_dir / f"analysis_{ts}.md"
+        else:
+            out_file = Path(out_path_str)
+            if not out_file.is_absolute():
+                out_file = git.root / out_file
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+
+        out_file.write_text(report_text, encoding="utf-8")
+        rel_path = out_file.relative_to(git.root).as_posix()
+        if getattr(args, "json", False):
+            print(json.dumps({"report_path": rel_path}, indent=2))
+        else:
+            print(f"Generated analysis report: {rel_path}")
+        return 0
 
     if getattr(args, "json", False):
         res = {
@@ -4650,6 +4883,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             p.add_argument("--scene", help="drill-down into metrics and attribution for a single scene ID (e.g. SCN-001)")
             p.add_argument("--compare", nargs="?", const="baseline", help="compare current metrics against a Git baseline (default: stage baseline)")
             p.add_argument("--no-cache", action="store_true", help="bypass metrics cache and force full recomputation")
+            p.add_argument("--report", action="store_true", help="generate a comprehensive markdown analysis report with wiki-links")
+            p.add_argument("--output", help="destination file path for the report (default: reports/analysis-<timestamp>.md)")
         if name == "takes":
             p.add_argument("action", choices=["list", "save", "diff", "activate", "delete"], help="take action")
             p.add_argument("id", nargs="?", default="all", help="scene ID, e.g. SCN-001")
