@@ -37,6 +37,9 @@ Propose, in chat or as a draft in `outline/outline.md`:
 - Parts (optional) and chapters with a one-line purpose each, POV and approximate story date.
 - A length budget: chapter targets that sum to the brief's `target_words`.
 - Where each `PLT` thread starts, turns and resolves.
+- **Serialization Strategy**: Identify parallel plot branches in the story DAG and propose how they
+  should be interleaved to maximize dramatic tension, suspense, and thematic contrast in accordance
+  with `story/style.md`.
 
 Iterate with the author until the macro structure is approved. Allocate `PRT`/`CHP` IDs with
 `next-id` only once the shape is stable, to avoid burning IDs.
@@ -49,10 +52,17 @@ advances, the facts and world rules it relies on, goal/conflict/outcome, beats, 
 Allocate `SCN` IDs with `next-id SCN`, saving between calls.
 
 While outlining:
-- **Causality & Prerequisites**: Every scene (and plot element) must identify which earlier elements
-  are its prerequisites (`Prerequisites: [[SCN-...]], [[PLT-...]]`). The outline must represent a valid
-  serialization of the story's directed acyclic graph (DAG), where every element is preceded in reading
-  order by all its prerequisites.
+- **Causality & Multiple Valid Serializations**:
+  The story causality DAG defines a *partial order*, meaning there is **more than one valid serialization order**
+  for the outline. Any sequence where every scene is preceded in reading order by all of its prerequisites is
+  causally valid.
+  The specific sequence chosen is a critical artistic decision governed by **`story/style.md`** and desired
+  **dramatic effects**:
+  - *Suspense & Dramatic Irony*: Placing an antagonist's setup beat before the protagonist's response creates dread;
+    reversing independent beats creates surprise or mystery.
+  - *Cross-Cutting & Cliffhangers*: Interweaving scenes across parallel subplots creates momentum and sharp chapter-end hooks.
+  - *Pacing Cadence*: Alternating high-stakes confrontations with quieter, reflective scenes to control the wave form of tension.
+  - *Thematic Juxtaposition*: Placing two causally independent scenes side-by-side to contrast themes, social classes, or philosophies.
 - **Root Denouement & Essentiality**: The novel's final denouement is the root of the story DAG. Mark the
   resolving scene with `- **Denouement:** true` (or specify it in `story/brief.md`). Every element in the
   story must have a directed causal path to the root denouement; inessential dead-ends are forbidden.

@@ -266,6 +266,11 @@ Narrative causality is modeled formally as a Directed Acyclic Graph:
   other elements must occur or be established prior to it (`Prerequisites: [[ID]]`).
 - **Serialization in Reading Order**: The novel's outline is a serialization of this DAG. For any dependency
   $u \to v$ ($v$ requires $u$), $u$ must appear before $v$ in the outline reading order ($pos(u) < pos(v)$).
+- **Multiple Valid Serializations**: A story DAG defines a partial order, admitting multiple valid topological sorts.
+  The specific serialization chosen is an artistic decision guided by `story/style.md` to achieve targeted
+  dramatic effects: generating suspense (dramatic irony), cross-cutting between parallel threads to land sharp
+  cliffhangers, alternating high-tension turns with reflective breathing room, and juxtaposing contrasting scenes
+  for thematic resonance.
 - **The Denouement Root**: The root of the DAG is the novel's final resolving scene or climax (designated
   by `- **Denouement:** true` or specified in `story/brief.md`).
 - **Essentiality (No Dead Ends)**: Every plot element and scene must have a directed causal path to the root

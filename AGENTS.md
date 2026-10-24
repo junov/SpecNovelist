@@ -70,6 +70,8 @@ by AI writing agents.
    - Every scene and plot element identifies its prerequisites (`Prerequisites: [[ID]]`).
    - The novel's outline is a strict serialization of this DAG: every element in the outline must be preceded
      in reading order by all of its prerequisites.
+   - A story's DAG admits multiple valid serialization orders; the chosen sequence is an artistic decision
+     shaped by `story/style.md` and desired dramatic effects (suspense, cross-cutting, pacing cadence, dramatic irony).
    - The root of the DAG is the novel's final denouement (`- **Denouement:** true` or specified in `story/brief.md`).
    - Every element in the story must have a causal path leading to the root denouement (no dead-ends or inessential scenes).
    - Automated DAG tests (`python scripts/specnovel.py dag`) must be executed whenever the outline is touched.

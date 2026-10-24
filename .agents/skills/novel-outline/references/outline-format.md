@@ -80,6 +80,34 @@ The outline is a serialization of a Directed Acyclic Graph (DAG) representing na
    no causal impact on the novel's outcome are rejected.
 4. **Automated Verification**: Run `specnovel.py dag` and `specnovel.py check` to validate all 3 invariants.
 
+### Multiple Valid Serializations & Dramatic Effects
+A DAG represents a **partial order**, not a single rigid sequence. Consequently, there is almost always
+**more than one valid serialization order** for a story's DAG. Any linear extension where every node is
+preceded by its prerequisites satisfies causal integrity.
+
+The selection among multiple valid serialization orders is an essential creative choice governed by
+**`story/style.md`** and the desire to achieve specific dramatic effects:
+
+1. **Suspense vs. Mystery (Dramatic Irony)**:
+   - If Branch A (the conspiracy prepares an ambush) and Branch B (the protagonist buys an ocean ticket)
+     are mutually independent paths converging on Branch C (the departure), ordering $A \to B \to C$ creates
+     **suspense** (the reader sees the trap closing).
+   - Ordering $B \to A \to C$ creates a **mystery / ticking clock** feeling.
+2. **Cross-Cutting & Cliffhangers**:
+   - In novels with parallel character POVs or multi-threaded subplots, interleaving scenes across branches
+     ($Thread1\_Scene1 \to Thread2\_Scene1 \to Thread1\_Scene2 \dots$) allows chapter breaks to land on
+     unresolved turns, maintaining dramatic tension.
+3. **Pacing & Tension Modulation**:
+   - `story/style.md` defines the novel's cadence. Causally independent character beats, atmospheric pauses,
+     or epistolary interludes can be sequenced between intense plot escalations to regulate emotional rhythm.
+4. **Thematic Juxtaposition**:
+   - Placing two independent scenes consecutively creates an implicit dialogue between them (e.g. juxtaposing
+     a luxurious first-class salon conversation with the grueling boiler room shift below), letting thematic
+     meaning emerge through montage without editorializing.
+5. **Information Economy & Clue Seeding**:
+   - Clues (`FCT` or `PLT` revelations) can be placed early in reading order to invite reader speculation,
+     or delayed until just before their dramatic payoff for sudden impact.
+
 ## Parts (optional)
 ```markdown
 ## PRT-002: Part Two - The Water

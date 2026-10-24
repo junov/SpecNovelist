@@ -11,6 +11,9 @@ Story Causality DAG & Reading Order Coherence:
   `- **Prerequisites:** [[SCN-...]], [[PLT-...]]`.
 - The outline is a serialization of this causality DAG: every element in the outline must be preceded
   by all its prerequisites (`specnovel.py check` & `specnovel.py dag` enforce this).
+- Multiple Valid Serializations: The story DAG admits multiple valid topological sorts. The chosen
+  serialization order is an artistic instrument shaped by `story/style.md` and desired dramatic effects
+  (e.g., suspense, dramatic irony, cross-cutting between subplots, pacing cadence, and thematic juxtaposition).
 - The story DAG must be acyclic (no circular causality).
 - The root of the DAG is the novel's final denouement (marked with `- **Denouement:** true` or designated
   in `story/brief.md`; defaults to the last scene).
