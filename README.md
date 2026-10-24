@@ -139,39 +139,39 @@ sequenceDiagram
     autonumber
     actor Author
     participant Agent as "AI Agent"
-    participant Specs as "story/ & kb/"
+    participant Specs as "story/ and kb/"
     participant Outline as "outline/"
     participant Abridged as "abridged/"
     participant Manuscript as "manuscript/"
     participant Git as "Git Baseline"
 
-    Note over Author,Git: Stage 1: Seed & Interview
+    Note over Author,Git: Stage 1: Seed and Interview
     Author->>Specs: Writes seed in story/synopsis.md
     Author->>Agent: Runs novel-init
     Agent->>Author: Conducts structured discovery interview
-    Agent->>Specs: Writes story/brief.md, seeds kb/ & RQ backlog, drafts story/style.md
+    Agent->>Specs: Writes story/brief.md, seeds kb/ and RQ backlog, drafts story/style.md
     Agent->>Git: Commits initial plan baseline (Novel-Sync: plan)
 
-    Note over Author,Git: Stage 2: Research & Story Bible
+    Note over Author,Git: Stage 2: Research and Story Bible
     Author->>Agent: Runs novel-research
-    Agent->>Specs: Conducts web research, records SRC & FCT, resolves RQ backlog
-    Author->>Agent: Runs novel-author to refine characters & places
+    Agent->>Specs: Conducts web research, records SRC and FCT, resolves RQ backlog
+    Author->>Agent: Runs novel-author to refine characters and places
 
     Note over Author,Git: Stage 3: High-Level Outline
     Author->>Agent: Runs novel-outline
     Agent->>Outline: Builds skeleton in reading order (PRT to CHP to SCN) cross-referencing KB
-    Author->>Outline: Reviews & approves outline structure
+    Author->>Outline: Reviews and approves outline structure
 
     Note over Author,Git: Stage 4: Intermediate Abridged Novel
     Author->>Agent: Runs novel-abridge (or novel-sync)
-    Agent->>Abridged: Drafts condensed chapters (all plot & key dialogue, lean description)
-    Author->>Abridged: Reviews pacing & dialogue; approves abridged baseline
+    Agent->>Abridged: Drafts condensed chapters (all plot and key dialogue, lean description)
+    Author->>Abridged: Reviews pacing and dialogue, then approves abridged baseline
 
     Note over Author,Git: Stage 5: Final Prose Rendering
     Author->>Agent: Runs novel-write (or novel-sync)
     Agent->>Manuscript: Renders full prose from abridged/, story/style.md, and kb/
-    Agent->>Agent: Runs specnovel.py check (audits continuity & integrity)
-    Author->>Manuscript: Reviews finished chapters; approves manuscript baseline
+    Agent->>Agent: Runs specnovel.py check (audits continuity and integrity)
+    Author->>Manuscript: Reviews finished chapters, then approves manuscript baseline
     Agent->>Git: Commits novel-sync(abridged, manuscript)
 ```
 
