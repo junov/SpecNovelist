@@ -91,7 +91,13 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
   items for every claim about them that needs a source.
 - Allocate every ID with `specnovel.py next-id <PREFIX>`, writing the file between calls so each
   call sees the previous ID. Never invent or reuse IDs by hand.
-- Create `kb/research/questions.md` with one `RQ` entry per research need, each with `Status:
+- **Automated Placeholder Conversion**: If `story/synopsis.md`, `story/brief.md`, or the initial seed
+  entries contain placeholders (`[...]`, `<...>`, `TODO`), automatically run
+  `python scripts/specnovel.py placeholders --create-rq` (or execute the equivalent automated extraction)
+  to generate structured `RQ` entries in `kb/research/questions.md`. This automatically assigns sequential
+  `RQ-xxx` IDs, priority, context excerpts, and entity links (`Needed for: [[ID]]`). Never ask the author
+  to manually type research questions for provisional story placeholders.
+- Create or update `kb/research/questions.md` with one `RQ` entry per research need, each with `Status:
   open`, a `Priority:` (high = blocks the outline) and `Needed for:` links.
 - Do **not** create `FCT` entries from memory. Facts are only created by `novel-research`, with
   sources.

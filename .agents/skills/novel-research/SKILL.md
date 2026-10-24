@@ -24,7 +24,8 @@ catalogs it so every scene can cite it.
 
 ### 1. Select the questions
 - Default queue: open `RQ` items in `kb/research/questions.md`, high priority first
-  (`specnovel.py check` lists open questions).
+  (`specnovel.py check` lists open questions; run `specnovel.py placeholders --create-rq`
+  to convert any untracked story placeholders into cataloged RQs).
 - Ad hoc requests: first create an `RQ` entry (`next-id RQ`) so the research is traceable.
 - Read the `Needed for:` items to learn *what the story needs*: the date, the procedure, the
   sensory texture, the vocabulary. Research to that need, not to the whole topic.

@@ -473,6 +473,7 @@ zero external dependencies and interacts directly with Git.
 | `impact` | Calculates exactly which scenes in `abridged/` or `manuscript/` must be (re)generated. | `python scripts/specnovel.py impact --stage abridged` |
 | `accept` | Stages files, validates integrity, and commits with `Novel-Sync:` git trailers. | `python scripts/specnovel.py accept --stage abridged -m "msg"` |
 | `feedback` | Lists and inspects editorial directives in `story/editorial/` (filter by scene or status). | `python scripts/specnovel.py feedback [SCN-xxx]` |
+| `placeholders` | Scans specs for placeholders (`[...]`, `<...>`) and optionally auto-generates `RQ` entries. | `python scripts/specnovel.py placeholders --create-rq` |
 | `index` | Regenerates `kb/INDEX.md` with table of all cataloged items and scene usage counts. | `python scripts/specnovel.py index` |
 | `stats` | Reports word count progress per chapter and scene against outline targets. | `python scripts/specnovel.py stats [--scenes]` |
 | `compile` | Assembles the novel in reading order into `build/` (supports Markdown, DOCX, EPUB, PDF). | `python scripts/specnovel.py compile --format epub` |

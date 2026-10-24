@@ -385,6 +385,71 @@ Make her colder and more diagnostic.
         self.assertTrue(any("invalid or missing 'Stage:'" in e for e in res["errors"]))
         self.assertTrue(any("invalid or missing 'Status:'" in e for e in res["errors"]))
 
+    def test_placeholders_detection_and_create_rq(self):
+        # Add placeholders to synopsis and a provisional character file
+        synopsis_with_placeholders = """\
+---
+title: "The Iron Mill"
+---
+# Synopsis
+In [summer 1892], in an industrial town near [Pittsburgh], [Protagonist - Eldest Daughter] discovers a secret.
+Her father, [Father - Disgraced Physician], treats wounded workers.
+
+### Placeholders Requiring Research
+- Period poison: Need uncommon medical alkaloid available in 1892.
+"""
+        self.write("story/synopsis.md", synopsis_with_placeholders)
+        self.write("kb/characters/CHR-003.md", "# CHR-003: [Protagonist - Eldest Daughter]\n- **Role:** Lead\n")
+
+        # 1. Scan placeholders via CLI --json
+        code, items = self.json_cli("placeholders")
+        self.assertEqual(code, 0)
+        self.assertGreaterEqual(len(items), 4)
+
+        protag_item = next((it for it in items if it["text"] == "Protagonist - Eldest Daughter"), None)
+        self.assertIsNotNone(protag_item)
+        self.assertIsNone(protag_item["tracked_by"])
+        # Should have 2 occurrences (synopsis.md and CHR-003.md)
+        self.assertEqual(len(protag_item["occurrences"]), 2)
+        chr_occ = next((occ for occ in protag_item["occurrences"] if occ["section_id"] == "CHR-003"), None)
+        self.assertIsNotNone(chr_occ)
+
+        # 2. Automatically generate RQs via --create-rq
+        code, out = self.run_cli("placeholders", "--create-rq")
+        self.assertEqual(code, 0)
+        self.assertIn("Generated", out)
+        self.assertIn("RQ-", out)
+
+        # Verify kb/research/questions.md was written with proper fields
+        rq_file = self.root / "kb/research/questions.md"
+        self.assertTrue(rq_file.exists())
+        rq_content = rq_file.read_text(encoding="utf-8")
+        self.assertIn("# Research Questions", rq_content)
+        self.assertIn("## RQ-001:", rq_content)
+        self.assertIn("- **Status:** open", rq_content)
+        # Check that CHR-003 was linked in Needed for:
+        self.assertIn("[[CHR-003]]", rq_content)
+
+        # 3. Subsequent run should recognize all placeholders as TRACKED
+        code, items_after = self.json_cli("placeholders")
+        self.assertEqual(code, 0)
+        untracked = [it for it in items_after if it["tracked_by"] is None]
+        self.assertEqual(len(untracked), 0)
+
+        # Running --create-rq again should report all tracked
+        code, out_again = self.run_cli("placeholders", "--create-rq")
+        self.assertEqual(code, 0)
+        self.assertIn("All detected placeholders are already tracked", out_again)
+
+    def test_manuscript_placeholder_warning(self):
+        # Putting an unresolved bracketed placeholder in manuscript prose triggers a warning
+        self.write(
+            "manuscript/CHP-001.md",
+            "# CHP-001: The Letter\n\n#### SCN-001: Elena receives the letter\n[Protagonist] stared at the letter.\n"
+        )
+        code, res = self.json_cli("check")
+        self.assertTrue(any("unresolved placeholder '[Protagonist]'" in w for w in res["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

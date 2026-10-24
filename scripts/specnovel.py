@@ -67,6 +67,24 @@ FRONT_RE = re.compile(r"\A---\s*\r?\n(.*?)\r?\n---\s*(\r?\n|\Z)", re.S)
 TARGET_RE = re.compile(r"target(?:[ _-]?length|[ _-]?words)?\**\s*:\**\s*~?\s*([\d][\d,]*)", re.I)
 FIELD_RE = r"^\s*[-*]?\s*\**{name}\**\s*:\**"
 WORD_RE = re.compile(r"[^\W_]+(?:['\u2019\-][^\W_]+)*")
+BRACKET_PLACEHOLDER_RE = re.compile(r'(?<![!\[\]])\[(?![\[\^ ])([^\]\n]+)\](?!\([^\)]*\)|\[[^\]]*\])')
+ANGLE_PLACEHOLDER_RE = re.compile(r'<(?!https?://|[a-zA-Z0-9._%+-]+@|(?:br|hr|div|span|p|b|i|strong|em|sub|sup|table|tr|td|th|ul|ol|li)\b|/)([^>\n]+)>', re.I)
+TODO_PLACEHOLDER_RE = re.compile(r'\b(?:TODO|TBD|FIXME):\s*([^\n]+)', re.I)
+
+@dataclass
+class PlaceholderOccurrence:
+    file: str
+    line: int
+    section_id: Optional[str]
+    context: str
+
+@dataclass
+class PlaceholderItem:
+    raw: str
+    text: str
+    kind: str
+    occurrences: List[PlaceholderOccurrence] = field(default_factory=list)
+    tracked_by: Optional[str] = None
 
 TRAILER = "Novel-Sync"
 STORY, KB, OUTLINE, ABRIDGED, MANUSCRIPT, BUILD = "story", "kb", "outline", "abridged", "manuscript", "build"
@@ -655,6 +673,129 @@ def run_dag_checks(p: Project) -> Tuple[List[str], List[str], List[str]]:
     return errors, warnings, infos
 
 
+# ------------------------------------------------------------------ placeholders
+def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[PlaceholderItem]:
+    git = p.git
+    root = git.root
+
+    if target_path:
+        tp = (root / target_path).resolve()
+        if tp.is_file():
+            files = [tp.relative_to(root).as_posix()]
+        elif tp.is_dir():
+            files = sorted(f.relative_to(root).as_posix() for f in tp.rglob("*.md"))
+        else:
+            raise NovelError(f"Path not found: {target_path}")
+    else:
+        files = []
+        for d in PLAN_DIRS:
+            dp = root / d
+            if dp.is_dir():
+                for f in dp.rglob("*.md"):
+                    rel = f.relative_to(root).as_posix()
+                    if rel == "kb/INDEX.md" or rel.startswith("kb/sources/"):
+                        continue
+                    files.append(rel)
+        files.sort()
+
+    items_by_key: Dict[str, PlaceholderItem] = OrderedDict()
+    existing_rqs = p.plan.of_type("RQ")
+
+    for rel in files:
+        fp = root / rel
+        if not fp.is_file():
+            continue
+        content = fp.read_text(encoding="utf-8", errors="replace")
+
+        in_fence = False
+        cur_id = None
+        in_placeholder_section = False
+
+        for line_no, raw_line in enumerate(content.splitlines(), 1):
+            if FENCE_RE.match(raw_line):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+
+            clean_line = COMMENT_RE.sub("", raw_line).strip()
+            if not clean_line:
+                continue
+
+            hm = HEADING_RE.match(raw_line)
+            if hm:
+                htext = hm.group(2).strip()
+                id_m = ID_HEADING_RE.match(htext)
+                if id_m:
+                    cur_id = id_m.group("id")
+                in_placeholder_section = bool(re.search(r"placeholder|research\s*(?:question|need|backlog)", htext, re.I))
+
+            # Skip markdown reference links definitions e.g. [1]: https://...
+            if re.match(r"^\s*\[[^\]]+\]:\s*\S+", clean_line):
+                continue
+
+            # 1. Bracket placeholders
+            for bm in BRACKET_PLACEHOLDER_RE.finditer(clean_line):
+                inner = bm.group(1).strip()
+                if inner.lower() in {"x", " ", "todo", "tbd"} or inner.isdigit():
+                    continue
+                clean_text = re.sub(r"^(?:TODO|TBD|FIXME|RESEARCH|PLACEHOLDER)\s*:\s*", "", inner, flags=re.I).strip()
+                key = clean_text.lower()
+                if key not in items_by_key:
+                    items_by_key[key] = PlaceholderItem(raw=f"[{inner}]", text=clean_text, kind="bracket")
+                ctx = clean_line[:120]
+                items_by_key[key].occurrences.append(PlaceholderOccurrence(rel, line_no, cur_id, ctx))
+
+            # 2. Angle placeholders
+            for am in ANGLE_PLACEHOLDER_RE.finditer(clean_line):
+                inner = am.group(1).strip()
+                if not inner or inner.lower() in {"br", "hr"}:
+                    continue
+                clean_text = re.sub(r"^(?:e\.g\.|ie\.|todo|tbd)\s*", "", inner, flags=re.I).strip()
+                key = clean_text.lower()
+                if key not in items_by_key:
+                    items_by_key[key] = PlaceholderItem(raw=f"<{inner}>", text=clean_text, kind="angle")
+                ctx = clean_line[:120]
+                items_by_key[key].occurrences.append(PlaceholderOccurrence(rel, line_no, cur_id, ctx))
+
+            # 3. TODO / TBD placeholders
+            if not BRACKET_PLACEHOLDER_RE.search(clean_line):
+                for tm in TODO_PLACEHOLDER_RE.finditer(clean_line):
+                    inner = tm.group(1).strip()
+                    if inner and len(inner) > 2:
+                        key = inner.lower()
+                        if key not in items_by_key:
+                            items_by_key[key] = PlaceholderItem(raw=tm.group(0), text=inner, kind="todo")
+                        ctx = clean_line[:120]
+                        items_by_key[key].occurrences.append(PlaceholderOccurrence(rel, line_no, cur_id, ctx))
+
+            # 4. List items under a placeholder section
+            if in_placeholder_section and re.match(r"^[-*]\s+", clean_line):
+                item_content = re.sub(r"^[-*]\s+", "", clean_line).strip()
+                if not BRACKET_PLACEHOLDER_RE.search(item_content):
+                    key = item_content.lower()
+                    if key not in items_by_key:
+                        items_by_key[key] = PlaceholderItem(raw=item_content, text=item_content, kind="section_list")
+                    ctx = clean_line[:120]
+                    items_by_key[key].occurrences.append(PlaceholderOccurrence(rel, line_no, cur_id, ctx))
+
+    for item in items_by_key.values():
+        key = item.text.lower()
+        sec_ids = {occ.section_id for occ in item.occurrences if occ.section_id}
+        for rq in existing_rqs:
+            rq_text = rq.text.lower()
+            if key in rq_text or (item.raw.lower() in rq_text):
+                item.tracked_by = rq.id
+                break
+            if sec_ids and any(sid in rq.ref_ids() for sid in sec_ids):
+                words = [w for w in re.split(r"\W+", key) if len(w) > 3]
+                if any(w in rq_text for w in words):
+                    item.tracked_by = rq.id
+                    break
+
+    return list(items_by_key.values())
+
+
 # ------------------------------------------------------------------ checks
 def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List[str], List[str]]:
     errors: List[str] = []
@@ -774,8 +915,14 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             for rid, line in s.refs:
                 if rid not in plan.defs:
                     errors.append(f"{name}: dangling reference [[{rid}]] at {s.file}:{line}")
-            if name == "manuscript" and REF_RE.search(COMMENT_RE.sub("", "\n".join(s.body))):
-                warnings.append(f"manuscript: visible [[ID]] markup left in prose of {sid} ({s.location})")
+            if name == "manuscript":
+                clean_body = COMMENT_RE.sub("", "\n".join(s.body))
+                if REF_RE.search(clean_body):
+                    warnings.append(f"manuscript: visible [[ID]] markup left in prose of {sid} ({s.location})")
+                for bm in BRACKET_PLACEHOLDER_RE.finditer(clean_body):
+                    inner = bm.group(1).strip()
+                    if inner.lower() not in {"x", " "} and not inner.isdigit():
+                        warnings.append(f"manuscript: unresolved placeholder '[{inner}]' left in prose of {sid} ({s.location})")
         missing = [sid for sid in o.scenes if sid not in d.scenes]
         if missing:
             msg = f"{name}: {len(missing)} of {len(o.scenes)} outline scene(s) not written yet"
@@ -783,6 +930,13 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
                 errors.append(msg + ": " + ", ".join(missing))
             elif d.scenes:
                 infos.append(msg)
+
+    # placeholders in specs
+    placeholders = scan_placeholders(p)
+    untracked_pl = [pl for pl in placeholders if pl.tracked_by is None]
+    if untracked_pl:
+        infos.append(f"{len(untracked_pl)} untracked placeholder(s) in specs (run 'specnovel.py placeholders --create-rq')")
+
     return errors, warnings, infos
 
 
@@ -990,12 +1144,15 @@ def cmd_status(git: Git, args) -> int:
     impacts = {st: compute_impact(p, st) for st in LAYERS}
     drift = {st: git.changed_since(git.baseline(st), LAYERS[st]) for st in LAYERS}
     words = {st: sum(word_count(s.body) for s in p.layers[st].scenes.values()) for st in LAYERS}
+    placeholders = scan_placeholders(p)
+    untracked_pl = [pl for pl in placeholders if pl.tracked_by is None]
     if args.json:
         emit_json({"title": project_title(git),
                    "baselines": {st: git.commit_info(git.baseline(st)) for st in STAGES},
                    "catalog": counts, "scenes": {"outline": len(p.outline.scenes),
                                                  **{st: len(p.layers[st].scenes) for st in LAYERS}},
                    "words": words, "pending": {st: len(impacts[st]["scenes"]) + len(impacts[st]["remove"]) for st in LAYERS},
+                   "placeholders": {"total": len(placeholders), "untracked": len(untracked_pl)},
                    "drift": drift, "errors": errors, "warnings": warnings, "infos": infos,
                    "next": next_step(p, impacts, errors)})
         return 0
@@ -1016,6 +1173,8 @@ def cmd_status(git: Git, args) -> int:
         if drift[st] and git.baseline(st):
             out.append(f"  {len(drift[st])} file(s) in {LAYERS[st]}/ changed since the {st} baseline "
                        f"(expected mid-sync; otherwise hand edits - see novel-verify drift triage)")
+    if untracked_pl:
+        out += ["", f"Placeholders: {len(untracked_pl)} untracked placeholder(s) - run 'specnovel.py placeholders --create-rq'"]
     out += ["", f"Check: {len(errors)} error(s), {len(warnings)} warning(s) - run 'check' for details",
             f"Next: {next_step(p, impacts, errors)}"]
     print("\n".join(out))
@@ -1031,10 +1190,15 @@ def next_step(p: Project, impacts: dict, errors: List[str]) -> str:
         return "novel-init: interview and seed the knowledge base"
     if errors:
         return "fix the errors reported by 'check'"
+    pl_untracked = [pl for pl in scan_placeholders(p) if pl.tracked_by is None]
+    if pl_untracked and not p.plan.of_type("RQ"):
+        return "run 'specnovel.py placeholders --create-rq' to generate research questions from placeholders"
     high = [s.id for s in p.plan.of_type("RQ")
             if re.search(r"status\**\s*:\**\s*open", s.text, re.I) and re.search(r"priority\**\s*:\**\s*high", s.text, re.I)]
     if high:
         return "novel-research: answer high-priority research questions " + ", ".join(high[:5])
+    if pl_untracked:
+        return "run 'specnovel.py placeholders --create-rq' to track remaining placeholders"
     if not p.outline.scenes:
         return "novel-outline: build the outline"
     if not p.git.baseline("plan"):
@@ -1169,8 +1333,8 @@ def cmd_dag(git: Git, args) -> int:
     return 1 if (cycles or ro_errors or ess_errors) else 0
 
 
-def cmd_next_id(git: Git, args) -> int:
-    prefix = args.prefix.upper()
+def allocate_next_ids(git: Git, prefix: str, count: int = 1) -> List[str]:
+    prefix = prefix.upper()
     if not re.fullmatch(r"[A-Z][A-Z0-9]*", prefix):
         raise NovelError("Prefix must be uppercase letters/digits, e.g. CHR")
     rx = re.compile(rf"^[+\- ]?#{{1,6}}\s+{prefix}-(\d+)\b")
@@ -1180,7 +1344,13 @@ def cmd_next_id(git: Git, args) -> int:
     if git.has_commits():  # every ID that ever appeared in history (any branch) is retired
         lines += (git.run("log", "--all", "--format=", "-p", "--", *ALL_DIRS) or "").splitlines()
     nums = [int(m.group(1)) for m in map(rx.match, lines) if m]
-    print(f"{prefix}-{(max(nums) if nums else 0) + 1:03d}")
+    start = (max(nums) if nums else 0) + 1
+    return [f"{prefix}-{n:03d}" for n in range(start, start + count)]
+
+
+def cmd_next_id(git: Git, args) -> int:
+    ids = allocate_next_ids(git, args.prefix, 1)
+    print(ids[0])
     return 0
 
 
@@ -1501,6 +1671,119 @@ def cmd_feedback(git: Git, args) -> int:
     return 0
 
 
+def cmd_placeholders(git: Git, args) -> int:
+    p = load_project(git)
+    target = getattr(args, "path", None)
+    items = scan_placeholders(p, target)
+    untracked = [item for item in items if item.tracked_by is None]
+
+    if getattr(args, "create_rq", False):
+        if not untracked:
+            print("All detected placeholders are already tracked by research questions.")
+            return 0
+
+        new_ids = allocate_next_ids(git, "RQ", len(untracked))
+        rq_blocks = []
+        created_info = []
+
+        for rq_id, item in zip(new_ids, untracked):
+            if getattr(args, "priority", None):
+                priority = args.priority
+            else:
+                sec_ids = {occ.section_id for occ in item.occurrences if occ.section_id}
+                is_high = any(sid.startswith(("CHR-", "PLC-", "PLT-", "ORG-", "OBJ-")) for sid in sec_ids)
+                high_keywords = {"name", "who", "when", "date", "year", "poison", "weapon", "kill", "murder",
+                                 "father", "daughter", "mother", "son", "immigrant", "historical", "census"}
+                if is_high or any(k in item.text.lower() for k in high_keywords):
+                    priority = "high"
+                else:
+                    priority = "medium"
+
+            sec_ids = sorted({occ.section_id for occ in item.occurrences if occ.section_id})
+            if sec_ids:
+                needed_for = ", ".join(f"[[{sid}]]" for sid in sec_ids)
+            else:
+                needed_for = ", ".join(sorted({occ.file for occ in item.occurrences}))
+
+            if sec_ids and any(sid.startswith("CHR-") for sid in sec_ids):
+                q = f"What are authentic period, demographic, and character details (including name, ethnicity, generation) for '{item.text}'?"
+            elif sec_ids and any(sid.startswith("PLC-") for sid in sec_ids):
+                q = f"What are historical, geographical, and sensory details for '{item.text}'?"
+            elif sec_ids and any(sid.startswith("PLT-") for sid in sec_ids):
+                q = f"What are historical constraints and causal details for plot element '{item.text}'?"
+            elif any(k in item.text.lower() for k in {"date", "when", "year", "summer", "winter", "spring", "autumn", "fall", "18", "19", "month"}):
+                q = f"What was the historical chronology, timeline, or seasonal context for '{item.text}'?"
+            else:
+                q = f"Determine authentic historical, technical, or narrative details for '{item.text}'."
+
+            first_occ = item.occurrences[0]
+            context = first_occ.context.replace("\n", " ").strip()
+
+            block = f"""## {rq_id}: Research for {item.raw}
+- **Status:** open
+- **Priority:** {priority}
+- **Needed for:** {needed_for}
+- **Question:** {q}
+- **Context:** {context}
+- **Answer:**
+- **Notes:** Automatically generated from placeholder in {first_occ.file}:{first_occ.line}"""
+            rq_blocks.append(block)
+            created_info.append({"id": rq_id, "placeholder": item.raw, "needed_for": needed_for, "priority": priority})
+
+        q_file = git.root / "kb" / "research" / "questions.md"
+        q_file.parent.mkdir(parents=True, exist_ok=True)
+        if q_file.exists():
+            existing = q_file.read_text(encoding="utf-8")
+            sep = "\n\n" if existing.strip() else ""
+            new_content = existing.rstrip() + sep + "\n\n".join(rq_blocks) + "\n"
+        else:
+            new_content = "# Research Questions\n\n" + "\n\n".join(rq_blocks) + "\n"
+        q_file.write_text(new_content, encoding="utf-8")
+
+        if getattr(args, "json", False):
+            emit_json({"created": created_info, "file": "kb/research/questions.md"})
+            return 0
+
+        print(f"Generated {len(created_info)} research question(s) in kb/research/questions.md:\n")
+        for ci in created_info:
+            print(f"  + {ci['id']}: Research for {ci['placeholder']} ({ci['priority']} priority, needed for {ci['needed_for']})")
+        print("\nUpdated kb/research/questions.md.")
+        print("Run 'python scripts/specnovel.py check' to verify catalog integrity.")
+        return 0
+
+    if getattr(args, "json", False):
+        data = []
+        for item in items:
+            data.append({
+                "raw": item.raw,
+                "text": item.text,
+                "kind": item.kind,
+                "tracked_by": item.tracked_by,
+                "occurrences": [{"file": o.file, "line": o.line, "section_id": o.section_id, "context": o.context} for o in item.occurrences]
+            })
+        emit_json(data)
+        return 0
+
+    if not items:
+        print("No placeholders detected in project specifications.")
+        return 0
+
+    print("# Placeholders detected in project specifications:\n")
+    for item in items:
+        status_str = f"TRACKED by [[{item.tracked_by}]]" if item.tracked_by else "UNTRACKED"
+        locs = ", ".join(f"{o.file}:{o.line}" + (f" (in [[{o.section_id}]])" if o.section_id else "") for o in item.occurrences)
+        print(f"  {item.raw}")
+        print(f"    Locations: {locs}")
+        print(f"    Status:    {status_str}\n")
+
+    if untracked:
+        print(f"{len(untracked)} untracked placeholder(s) found out of {len(items)} total.")
+        print("Run 'python scripts/specnovel.py placeholders --create-rq' to automatically generate research questions in kb/research/questions.md.")
+    else:
+        print(f"All {len(items)} detected placeholder(s) are tracked by research questions.")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="specnovel", description=__doc__.split("\n\n")[0])
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
@@ -1515,14 +1798,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              ("impact", "scenes to (re)generate in a derived layer"),
              ("accept", "commit and advance one or more stage baselines"),
              ("feedback", "list and inspect editorial directives (story/editorial/EDT-xxx)"),
+             ("placeholders", "scan and convert placeholders into research questions (RQ)"),
              ("index", "regenerate kb/INDEX.md (catalog of all IDs)"),
              ("stats", "word counts per chapter/scene vs targets"),
              ("compile", "assemble the novel in reading order into build/"),
              ("log", "list sync commits")]
     for name, help_ in specs:
         p = sub.add_parser(name, help=help_)
-        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback"):
+        if name in ("status", "check", "dag", "trace", "delta", "impact", "stats", "feedback", "placeholders"):
             p.add_argument("--json", action="store_true", help="machine-readable output")
+        if name == "placeholders":
+            p.add_argument("path", nargs="?", help="optional file or directory to scan (default: all plan dirs)")
+            p.add_argument("--create-rq", action="store_true", help="automatically create RQ entries in kb/research/questions.md")
+            p.add_argument("--priority", choices=["high", "medium", "low"], help="override priority for generated RQs")
         if name == "dag":
             p.add_argument("--mermaid", action="store_true", help="output story DAG as a mermaid diagram")
         if name == "check":
@@ -1563,7 +1851,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = Path(args.root).resolve()
     handlers = {"init": cmd_init, "status": cmd_status, "check": cmd_check, "dag": cmd_dag, "next-id": cmd_next_id,
                 "trace": cmd_trace, "delta": cmd_delta, "impact": cmd_impact, "accept": cmd_accept, "index": cmd_index,
-                "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback}
+                "stats": cmd_stats, "compile": cmd_compile, "log": cmd_log, "feedback": cmd_feedback,
+                "placeholders": cmd_placeholders}
     try:
         if args.command == "init":
             return cmd_init(root, args)

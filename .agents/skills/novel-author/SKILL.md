@@ -31,7 +31,10 @@ help the author change it precisely. **The author owns the story: you propose, t
    `specnovel.py next-id <PREFIX>` and save the file before allocating the next ID.
 4. Wire cross-references both ways where useful (e.g. relationship lines on both characters).
 5. Any claim about the real world (history, science, law, geography, current events, real people)
-   becomes an `RQ` item for `novel-research`; never write it as a fact from memory.
+   becomes an `RQ` item for `novel-research`; never write it as a fact from memory. When adding
+   provisional entries with placeholders (`[...]`, `<...>`, or `TODO`), run
+   `python scripts/specnovel.py placeholders --create-rq` to automatically register, prioritize,
+   and link the research questions.
 6. Run `specnovel.py check` and the checklist; fix your own errors.
 7. Show the diff and your assumptions. Stop; do not touch the outline or derived layers.
 

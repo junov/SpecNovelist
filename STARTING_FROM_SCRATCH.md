@@ -105,29 +105,113 @@ The agent will lead the structured interview:
    - `kb/characters/CHR-001.md` is created with permanent ID `CHR-001` and title `CHR-001: [Protagonist - Eldest Daughter]`.
    - `kb/characters/CHR-002.md` is created as `CHR-002: [Father - Disgraced Physician]`.
    - `kb/places/PLC-001.md` is created as `PLC-001: [Monongahela River Mill Town]`.
+5. **Automate Research Backlog Generation**: `novel-init` automatically invokes the placeholder extraction pipeline to turn all seed placeholders into cataloged research questions (`RQ`) without any manual typing.
 
 ---
 
-### Step 4: Convert Placeholders into Research Questions (`RQ`)
+### Step 4: Automatically Convert Placeholders into Research Questions (`RQ`)
 
-Every placeholder in your seed story should be translated into an actionable entry in the Research Question backlog (`kb/research/questions.md`):
+You do not need to manually write research questions for each unknown detail. SpecNovelist provides an **automated placeholder extraction engine** built directly into `specnovel.py`.
+
+#### 1. Scan Untracked Placeholders
+Run `specnovel.py placeholders` to inspect all provisional elements detected across `story/`, `kb/`, and `outline/`:
+
+```bash
+python scripts/specnovel.py placeholders
+```
+
+Example output:
+```text
+# Placeholders detected in project specifications:
+
+  [Protagonist - Eldest Daughter]
+    Locations: story/synopsis.md:57, kb/characters/CHR-001.md:1 (in [[CHR-001]])
+    Status:    UNTRACKED
+
+  [Father - Disgraced Physician]
+    Locations: story/synopsis.md:57, kb/characters/CHR-002.md:1 (in [[CHR-002]])
+    Status:    UNTRACKED
+
+  [summer 1892]
+    Locations: story/synopsis.md:57
+    Status:    UNTRACKED
+
+  [Pittsburgh]
+    Locations: story/synopsis.md:57
+    Status:    UNTRACKED
+
+  Period poison: Need uncommon medical alkaloid available in 1892.
+    Locations: story/synopsis.md:69
+    Status:    UNTRACKED
+
+5 untracked placeholder(s) found out of 5 total.
+Run 'python scripts/specnovel.py placeholders --create-rq' to automatically generate research questions in kb/research/questions.md.
+```
+
+The engine automatically:
+- Scans bracketed descriptors (`[...]`), angle brackets (`<...>`), `TODO`/`TBD` markers, and list items under placeholder sections.
+- Deduplicates occurrences across files (e.g., identifying that `[Protagonist - Eldest Daughter]` in `story/synopsis.md` and `kb/characters/CHR-001.md` refers to the same underlying entity).
+- Associates placeholders with enclosing entity IDs (`[[CHR-001]]`).
+
+#### 2. Generate the Research Backlog Automatically
+Run `placeholders --create-rq`:
+
+```bash
+python scripts/specnovel.py placeholders --create-rq
+```
+
+Example output:
+```text
+Generated 5 research question(s) in kb/research/questions.md:
+
+  + RQ-001: Research for [Protagonist - Eldest Daughter] (high priority, needed for [[CHR-001]])
+  + RQ-002: Research for [Father - Disgraced Physician] (high priority, needed for [[CHR-002]])
+  + RQ-003: Research for [summer 1892] (high priority, needed for story/synopsis.md)
+  + RQ-004: Research for [Pittsburgh] (high priority, needed for story/synopsis.md)
+  + RQ-005: Research for Period poison (high priority, needed for story/synopsis.md)
+
+Updated kb/research/questions.md.
+Run 'python scripts/specnovel.py check' to verify catalog integrity.
+```
+
+The engine writes complete, structured entries directly into `kb/research/questions.md`:
 
 ```markdown
 # Research Questions
 
-## RQ-001: Historical Welsh immigrant naming conventions in 1890s Western Pennsylvania
+## RQ-001: Research for [Protagonist - Eldest Daughter]
 - **Status:** open
 - **Priority:** high
-- **Needed for:** [[CHR-001]], [[CHR-002]]
-- **Question:** What were common male given names and surnames among working-class Welsh immigrants born in the 1840s? What were popular given names for their American-born daughters in the 1870s?
-- **Scope:** 1890 US Federal Census records for Allegheny County, PA; Welsh immigration registers.
+- **Needed for:** [[CHR-001]]
+- **Question:** What are authentic period, demographic, and character details (including name, ethnicity, generation) for 'Protagonist - Eldest Daughter'?
+- **Context:** In [summer 1892], in an industrial steel town near [Pittsburgh], [Protagonist - Eldest Daughter], a 22-year-old telegrapher...
+- **Answer:**
+- **Notes:** Automatically generated from placeholder in story/synopsis.md:57
 
-## RQ-002: Period-accurate chemical poisons available in 1890s industrial metallurgy
+## RQ-002: Research for [Father - Disgraced Physician]
 - **Status:** open
 - **Priority:** high
-- **Needed for:** [[OBJ-001]], [[PLT-002]]
-- **Question:** What toxic alkaloids or industrial reagents were commonly present in Bessemer process steel mills or physician dispensaries in 1892 that could mimic acute cardiac failure?
+- **Needed for:** [[CHR-002]]
+- **Question:** What are authentic period, demographic, and character details (including name, ethnicity, generation) for 'Father - Disgraced Physician'?
+- **Context:** discovers that her father—[Father - Disgraced Physician], an immigrant who fled...
+- **Answer:**
+- **Notes:** Automatically generated from placeholder in story/synopsis.md:57
 ```
+
+#### 3. Idempotent & Non-Duplicating
+If you run `specnovel.py placeholders` again, it reports that all items are now `TRACKED by [[RQ-xxx]]`:
+
+```text
+# Placeholders detected in project specifications:
+
+  [Protagonist - Eldest Daughter]
+    Locations: story/synopsis.md:57, kb/characters/CHR-001.md:1 (in [[CHR-001]])
+    Status:    TRACKED by [[RQ-001]]
+...
+All 5 detected placeholder(s) are tracked by research questions.
+```
+
+If you add a new placeholder later (e.g. `[River barge captain]` in a scene outline), running `specnovel.py placeholders --create-rq` will allocate only the new `RQ-006` without altering or duplicating existing questions!
 
 ---
 

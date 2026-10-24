@@ -51,10 +51,12 @@ by AI writing agents.
    - IDs are never renumbered or reused, even after deletion.
    - Allocate new IDs exclusively via `python scripts/specnovel.py next-id <PREFIX>`.
    - Cross-references use `[[ID]]` or `[[ID|display text]]`.
-3. **No Researched Facts Without Sources**:
+3. **No Researched Facts Without Sources & Automated Placeholder Conversion**:
    Never record real-world claims (history, science, medicine, law, geography, current events) from
    memory or hallucination. Every fact (`FCT`) must cite at least one verified source record (`SRC`)
-   that was actually read, with primary and authoritative sources prioritized.
+   that was actually read, with primary and authoritative sources prioritized. Story placeholders
+   (`[...]`, `<...>`) must be converted into research questions (`RQ`) using automated tooling
+   (`python scripts/specnovel.py placeholders --create-rq`) rather than manual entry.
 4. **Intermediate Artifact Fidelity**:
    Never jump directly from the outline to the final manuscript. The abridged version (`abridged/`)
    must always be synthesized first to lock in plot causality and key dialogue.
@@ -66,6 +68,7 @@ by AI writing agents.
    - `python scripts/specnovel.py status`: Check catalog status, scene coverage, and un-synced drift.
    - `python scripts/specnovel.py check`: Automated integrity checks (fails on dangling links, unsourced facts, misordered scenes, or DAG violations).
    - `python scripts/specnovel.py dag`: Validates story causality DAG (acyclicity, reading order coherence, denouement essentiality).
+   - `python scripts/specnovel.py placeholders --create-rq`: Automatically converts placeholders across story specs into cataloged research questions (RQ).
    - `python scripts/specnovel.py impact --stage <abridged|manuscript>`: Identify scenes that need (re)generation.
    - `python scripts/specnovel.py accept --stage <stage> -m "<msg>"`: Commit synchronized changes.
 7. **Story Causality as a DAG & Reading Order Coherence**:
