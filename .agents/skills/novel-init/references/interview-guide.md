@@ -139,9 +139,14 @@ The resulting `story/style.md` must be a **concrete, binding style guide** (mini
    - For every language configured in `story/config.md`, define typographical rules (e.g. French guillemets and dialogue dashes vs. English quotes), punctuation spacing, and idioms.
 7. **Glossary Guidelines (`## Glossary Guidelines`)** [Required]:
    - Define concrete criteria for terms that should be cataloged in `kb/glossary/` (e.g. historical jargon, invented tech, period idioms).
-8. **Forbidden Anti-Patterns** [Required]:
+8. **Graphics Guidelines (`## Graphics Guidelines`)** [Required]:
+   - Define the level of graphic intensity across the novel (`none`, `minimal`, `selective` (recommended default), `rich / frequent`).
+   - Define rendering styles for artistic assets (medium, palette, lighting) and technical assets (drafting aesthetic, cartography, blueprints).
+   - Establish usage rules (triggers like spatial transitions, mechanical apparatus, epistolary documents; negative rules like no decorative clutter, no spoilers).
+   - Set placement conventions, aspect ratio standards, and text localization policies.
+9. **Forbidden Anti-Patterns** [Required]:
    - Explicitly ban modern clichés, generic AI turns of phrase (*"a testament to", "tapestry of", "she didn't know she was holding"*), and sensory filter words (*"she heard", "he watched"*).
-9. **Voice Anchors & Sample Passages**:
+10. **Voice Anchors & Sample Passages**:
    - Provide 2-3 exemplar voice anchor passages. If the author has their own written excerpts, they may supply them. **Provide explicit option: `"Have the agent draft exemplar voice anchors based on selected touchstone authors / Skip custom excerpts"`**.
 
 ### Phase 7: Synthesis, Schema Validation & Approval
@@ -149,14 +154,14 @@ The resulting `story/style.md` must be a **concrete, binding style guide** (mini
    - Write [story/config.md](file:///c:/Users/Justin/Documents/dev/SpecNovelist/templates/project/story/config.md) with complete author metadata, languages, toggles, budget, and locale settings.
    - Write `story/brief.md` with all premise, cast, plot, and scope decisions.
    - Write `story/acknowledgements.md` ensuring transparent disclosure of AI models assisting with the novel.
-   - Draft `story/style.md` as an exhaustive, binding guide including locale sections and glossary guidelines.
+   - Draft `story/style.md` as an exhaustive, binding guide including locale sections, glossary guidelines, and graphics guidelines.
    - Seed `kb/` entries (`CHR`, `PLC`, `ORG`, `OBJ`, `PLT`, `THM`, `WLD`) with permanent IDs.
    - Automatically convert any story placeholders into research questions via `specnovel.py placeholders --create-rq`.
 2. **Automated Verification Gate**:
    - Run `python scripts/specnovel.py check` to verify:
      - `story/config.md` strictly adheres to schema (zero missing required fields or unknown keys).
      - `story/acknowledgements.md` is populated and discloses all contributing AI models.
-     - `story/style.md` has >= 400 words, contains `# Locale: <locale>` sections, and contains `## Glossary Guidelines`.
+     - `story/style.md` has >= 400 words, contains `# Locale: <locale>` sections, `## Glossary Guidelines`, and `## Graphics Guidelines`.
      - All KB entities, sources, and plot elements satisfy spatiotemporal and referencing requirements.
    - Fix any reported errors or warnings automatically.
 3. **Author Approval & Plan Baseline**:

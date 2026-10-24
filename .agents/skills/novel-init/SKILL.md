@@ -131,6 +131,7 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
   - Sentence rhythm, diction register, dialogue tag rules, and sensory priorities (the Friction Principle).
   - `# Locale: <locale>` section for each configured target language in `story/config.md` (defining punctuation, dialogue dashes/guillemets, and regional idioms).
   - `## Glossary Guidelines` (establishing criteria for terms cataloged under `kb/glossary/`).
+  - `## Graphics Guidelines` (defining graphics intensity, artistic and technical rendering styles, trigger rules, placement, and localization).
   - Banned anti-patterns and clichés.
   - 2–3 exemplar voice anchors.
 
@@ -138,7 +139,7 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
 1. Run `python scripts/specnovel.py check` to verify:
    - `story/config.md` strictly validates against schema.
    - `story/acknowledgements.md` exists, is non-empty, and acknowledges all contributing AI models.
-   - `story/style.md` has >= 400 words, contains all `# Locale: <locale>` sections, and contains `## Glossary Guidelines`.
+   - `story/style.md` has >= 400 words, contains all `# Locale: <locale>` sections, `## Glossary Guidelines`, and `## Graphics Guidelines`.
    - All seeded KB items have valid spatiotemporal metadata (`PLT`), valid types, and no dangling references.
 2. Run `python scripts/specnovel.py index`.
 3. Present a concise summary: brief highlights, config settings, catalog counts per type, research backlog (high

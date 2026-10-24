@@ -24,6 +24,7 @@ chapter-level information; references there apply to all of its scenes (e.g. cha
 - **Purpose:** what this chapter does for the novel (turning point, escalation, breather)
 - **POV:** [[CHR-001]]
 - **Span:** 1912-04-14 evening -> 1912-04-15 dawn
+- **Graphics:** [[GFX-001]] (optional chapter-level header asset or placeholder [GFX: North Atlantic ice field map])
 - **Target words:** 6000
 ```
 
@@ -38,6 +39,7 @@ chapter-level information; references there apply to all of its scenes (e.g. cha
 - **Plot:** escalates [[PLT-001]]; pays off [[PLT-005]] (setup in SCN-006)
 - **Facts:** [[FCT-030]], [[FCT-031]]
 - **World:** (futuristic or invented elements) [[WLD-002]]
+- **Graphics:** [[GFX-002]] (or placeholder [GFX: Transverse watertight bulkhead cutaway schematic showing boiler room 6])
 - **Goal / conflict / outcome:** Elena wants to reach Karl's cabin; the steward bars E deck; she
   slips past but finds the cabin empty.
 - **Beats:**
@@ -56,6 +58,12 @@ chapter-level information; references there apply to all of its scenes (e.g. cha
 ```
 
 Guidance:
+- **Graphics**: Governed by `story/style.md` > `## Graphics Guidelines`. `novel-outline` decides where visual
+  assets are needed based on the style's `Intensity`, `Rendering Styles` (artistic vs technical), and `Usage Rules`.
+  - Link cataloged assets using `[[GFX-xxx]]`.
+  - Specify uncataloged visual needs using functional placeholders: `[GFX: <type> - <description>]`.
+  - Referencing a graphic in the outline binds it to the **Story DAG**, activating it so that `specnovel.py impact --stage graphics`
+    renders it during synchronization while skipping inactive KB assets to conserve AI tokens.
 - **Prerequisites**: Explicitly lists every earlier scene, plot element, or fact that must causally
   occur or be established before this scene can happen. Must precede this scene in the outline.
 - **Denouement**: Designates the final resolving scene as the root of the story DAG. If omitted,

@@ -16,7 +16,8 @@ by AI writing agents.
   - `synopsis.md`: The seed synopsis. Never rewritten by agents without explicit author approval.
   - `brief.md`: Interview decisions: premise, genre, audience, length, POV, setting eras, research rigor.
   - `style.md`: **Binding writing-style guide** for the manuscript. Dictates voice, rhythm, POV, diction,
-    dialogue conventions, interiority, glossary guidelines, and locale-specific sections (`# Locale: <locale>`).
+    dialogue conventions, interiority, glossary guidelines, graphics guidelines (`## Graphics Guidelines`),
+    and locale-specific sections (`# Locale: <locale>`).
   - `acknowledgements.md`: **Mandatory Verbatim Acknowledgements.** Preserves credits, tool attributions, and
     mandatory disclosures for all AI models utilized by contributing agents, injected verbatim into compiled books.
   - `editorial/`: **The Editorial Feedback Database (`EDT-NNN.md`).** Records situational, scene-specific, or
@@ -33,8 +34,8 @@ by AI writing agents.
     falling back to primary or unlocalized assets when no text labels exist.
 - **`outline/`**: **The Skeleton of the Novel in Reading Order.**
   - Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`).
-  - Sets up when, where, cast, plot movement, sourced facts, goal/conflict/outcome, beats, key dialogue,
-    and target word counts.
+  - Sets up when, where, cast, plot movement, sourced facts, graphics references/placeholders (`[[GFX-xxx]]` or `[GFX: ...]`),
+    goal/conflict/outcome, beats, key dialogue, and target word counts.
 - **`abridged/`**: **Derived Intermediate Artifact (Condensed Novel).**
   - Contains **all plot elements** and **all important dialogues**, but with less descriptive texture
     than the final novel. One file per chapter (`CHP-001.md`).
@@ -101,6 +102,10 @@ by AI writing agents.
 9. **Token-Optimized Graphics Asset Sync with Per-Asset Tracking**:
    Rendered graphics (maps, diagrams, character portraits, scene artwork, book covers) are generated
    from specifications in `kb/graphics/` (`GFX-NNN`) and stored in `/graphics`.
+   - **Outline-Driven Graphic Placement**: The `novel-outline` skill is responsible for deciding where graphics
+     are placed across chapters and scenes, guided by `story/style.md` > `## Graphics Guidelines` (intensity level,
+     artistic and technical rendering styles, and visual triggers). Graphics placeholders (`[GFX: ...]`) and
+     cataloged references (`[[GFX-xxx]]`) are embedded in the outline, explicitly linking them to the Story DAG.
    - **Story DAG Pruning (AI Token Saver)**: Only graphics entities referenced by the story DAG (in scenes
      or as story prerequisites) are rendered during sync. Inactive assets defined in KB are skipped with zero token consumption.
    - **Per-Asset Sync Tracking**: Sync baselines are recorded per asset via `Novel-GFX-Sync: GFX-NNN` trailers.
@@ -144,7 +149,7 @@ by AI writing agents.
 | **`novel-init`** | Project Bootstrapper & Discovery Interview | When starting a new novel from a synopsis, conducting the guided discovery interview (calibrated to novice/intermediate/experienced writers), scaffolding the project, or generating the validated config, brief, style guide, and KB baseline. |
 | **`novel-author`** | Story Bible & KB Authoring | When creating, editing, or reviewing characters (`CHR`), places (`PLC`), plot elements (`PLT`), themes (`THM`), world rules (`WLD`), timeline events (`TML`), graphics (`GFX`), or brief details. Never touches prose drafts. |
 | **`novel-research`** | Sourced Online Fact Gathering | When researching historical, scientific, or current-events topics, answering research questions (`RQ`), finding primary sources, or verifying factual accuracy. Never creates facts without sources. |
-| **`novel-outline`** | Structural Skeleton Builder | When creating, restructuring, or revising the novel's skeleton in reading order (parts, chapters, scenes), auditing pacing, or checking plot thread coverage. Never writes prose. |
+| **`novel-outline`** | Structural Skeleton Builder | When creating, restructuring, or revising the novel's skeleton in reading order (parts, chapters, scenes), deciding graphics placement and embedding GFX references/placeholders, auditing pacing, or checking plot thread coverage. Never writes prose. |
 | **`novel-abridge`** | Intermediate Draft Synthesizer | When synthesizing or updating the lean, condensed version of chapters in `abridged/` containing all plot elements and key dialogues with minimal description, embedding active graphics. |
 | **`novel-write`** | Final Prose Rendering | When rendering final literary prose in `manuscript/` from `abridged/` + `story/style.md` + `kb/`. Enforces style, sensory grounding, graphics embedding, and anti-pattern bans. |
 | **`novel-sync`** | Incremental Compilation Engine | When changes in `story/`, `kb/`, or `outline/` need to be compiled and synchronized into `graphics/`, `abridged/`, and `manuscript/`, running integrity checks and advancing git baselines. |

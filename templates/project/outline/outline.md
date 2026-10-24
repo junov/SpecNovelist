@@ -27,6 +27,7 @@ Hierarchy (Parts are optional):
 ### CHP-001: The Letter
 Purpose: What this chapter does for the novel.
 POV: [[CHR-001]] | Time: [[TML-003]] | Setting: [[PLC-002]]
+Graphics: [[GFX-001]] (optional chapter header asset or placeholder [GFX: Harbor map])
 
 #### SCN-001: Elena receives the letter
 - **Prerequisites:** None (or list [[SCN-...]], [[PLT-...]], [[FCT-...]])
@@ -37,6 +38,7 @@ POV: [[CHR-001]] | Time: [[TML-003]] | Setting: [[PLC-002]]
 - **Plot:** advances [[PLT-001]] (setup); plants [[PLT-007]]
 - **Facts:** [[FCT-003]], [[FCT-011]]
 - **World:** [[WLD-002]]
+- **Graphics:** [[GFX-001]] (or placeholder [GFX: Facsimile of the unsigned letter with wax seal], or None)
 - **Goal / conflict / outcome:** Elena wants...; blocked by...; ends with...
 - **Beats:**
   1. ...

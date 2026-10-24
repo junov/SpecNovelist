@@ -77,7 +77,7 @@ class ProjectTest(unittest.TestCase):
         self.git("config", "user.email", "t@example.com")
         self.git("config", "user.name", "Test")
         self.write("story/synopsis.md", "---\ntitle: The Crossing\n---\n# Synopsis\n" + "word " * 50)
-        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
         self.write("kb/characters/CHR-001-elena.md", CHAR)
         self.write("kb/characters/CHR-002-karl.md", CHAR2)
         self.write("kb/places/PLC-001-harbor.md", PLACE)
@@ -711,7 +711,7 @@ Her father, [Father - Disgraced Physician], treats wounded workers.
 """
         self.write("story/config.md", multi_config)
         # Update style.md with fr-FR section
-        self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n" + "rule " * 500)
+        self.write("story/style.md", "# Style\n# Locale: en-US\n# Locale: fr-FR\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
 
         # 1. Editorial directives tagged with locales
         edt_fr = """\
@@ -858,6 +858,47 @@ Elena opens the letter.
         compiled_book = (self.root / "build/manuscript.md").read_text(encoding="utf-8")
         self.assertIn("# Acknowledgements", compiled_book)
         self.assertIn("Assisted by Gemini 2.5 Pro and Claude 3.7 Sonnet.", compiled_book)
+
+    def test_style_graphics_guidelines_and_outline_placement(self):
+        # 1. Missing Graphics Guidelines in style.md emits warning in check
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n" + "rule " * 500)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertTrue(any("lacks '## Graphics Guidelines' section" in w for w in res["warnings"]))
+
+        # 2. Restoring Graphics Guidelines resolves warning
+        self.write("story/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n" + "rule " * 500)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+        self.assertFalse(any("lacks '## Graphics Guidelines' section" in w for w in res["warnings"]))
+
+        # 3. Graphics placeholder [GFX: ...] scanned and recognized with kind='gfx'
+        outline_with_gfx = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Graphics:** [GFX: Harbor approach chart]"
+        )
+        self.write("outline/outline.md", outline_with_gfx)
+        code, pl_res = self.json_cli("placeholders")
+        self.assertEqual(code, 0)
+        self.assertTrue(any(p["kind"] == "gfx" and p["text"] == "Harbor approach chart" for p in pl_res))
+
+        # 4. Referencing [[GFX-001]] in outline activates it in the Story DAG
+        gfx_def = """# GFX-001: Harbor approach chart
+- **Type:** map
+- **Target:** graphics/GFX-001.png
+- **Description:** Nautical chart of harbor.
+"""
+        self.write("kb/graphics/GFX-001-harbor.md", gfx_def)
+        outline_with_gfx_ref = OUTLINE.replace(
+            "- **Where:** [[PLC-001]]",
+            "- **Where:** [[PLC-001]]\n- **Graphics:** [[GFX-001]]"
+        )
+        self.write("outline/outline.md", outline_with_gfx_ref)
+
+        code, impact_res = self.json_cli("impact", "--stage", "graphics")
+        self.assertEqual(code, 0)
+        active_assets = [item["id"] for item in impact_res["active"]]
+        self.assertIn("GFX-001", active_assets)
 
 
 if __name__ == "__main__":

@@ -1184,10 +1184,12 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
                 inner = bm.group(1).strip()
                 if inner.lower() in {"x", " ", "todo", "tbd"} or inner.isdigit():
                     continue
-                clean_text = re.sub(r"^(?:TODO|TBD|FIXME|RESEARCH|PLACEHOLDER)\s*:\s*", "", inner, flags=re.I).strip()
+                is_gfx = bool(re.match(r"^(?:GFX|GRAPHIC)\s*:\s*", inner, re.I))
+                clean_text = re.sub(r"^(?:TODO|TBD|FIXME|RESEARCH|PLACEHOLDER|GFX|GRAPHIC)\s*:\s*", "", inner, flags=re.I).strip()
                 key = clean_text.lower()
+                kind = "gfx" if is_gfx else "bracket"
                 if key not in items_by_key:
-                    items_by_key[key] = PlaceholderItem(raw=f"[{inner}]", text=clean_text, kind="bracket")
+                    items_by_key[key] = PlaceholderItem(raw=f"[{inner}]", text=clean_text, kind=kind)
                 ctx = clean_line[:120]
                 items_by_key[key].occurrences.append(PlaceholderOccurrence(rel, line_no, cur_id, ctx))
 
@@ -1380,6 +1382,8 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
                 warnings.append(f"writing-style guide '{STYLE_FILE}' lacks guidance section for configured locale '{loc}' (expected heading '# Locale: {loc}')")
         if not re.search(r"^#{1,3}\s+Glossary\s+(?:Guidelines|Criteria)\b", style_text, re.I | re.M):
             warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Glossary Guidelines' section for automated term discovery")
+        if not re.search(r"^#{1,3}\s+(?:Graphics|Visual\s+Assets?)\s+(?:Guidelines|Rules|Style)?\b", style_text, re.I | re.M):
+            warnings.append(f"writing-style guide '{STYLE_FILE}' lacks '## Graphics Guidelines' section to govern visual asset usage, intensity, and rendering styles")
 
     # catalog integrity
     errors += [f"duplicate ID {d['id']}: {d['first']} and {d['second']}" for d in plan.duplicates]

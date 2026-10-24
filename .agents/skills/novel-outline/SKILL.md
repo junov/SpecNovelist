@@ -26,8 +26,8 @@ draft must contain every outlined scene, in this order, and nothing that contrad
 ## Workflow
 
 ### 1. Load context
-Read `story/synopsis.md`, `story/brief.md`, `kb/INDEX.md` (run `specnovel.py index` first), all
-`PLT`, `CHR` (major), `TML` and `WLD` entries, and the facts linked from them.
+Read `story/synopsis.md`, `story/brief.md`, `story/style.md` (specifically `## Graphics Guidelines`), `kb/INDEX.md`
+(run `specnovel.py index` first), all `PLT`, `CHR` (major), `TML`, `WLD`, and `GFX` entries, and the facts linked from them.
 
 ### 2. Pass 1: macro structure (approval gate)
 Propose, in chat or as a draft in `outline/outline.md`:
@@ -40,6 +40,9 @@ Propose, in chat or as a draft in `outline/outline.md`:
 - **Serialization Strategy**: Identify parallel plot branches in the story DAG and propose how they
   should be interleaved to maximize dramatic tension, suspense, and thematic contrast in accordance
   with `story/style.md`.
+- **Macro Visual Assets Plan**: In accordance with `story/style.md` > `## Graphics Guidelines`, determine
+  macro graphics needs based on the configured `Intensity` and `Target Budget` (e.g. frontispiece / book cover,
+  world/theater maps, or part opening plates).
 
 Iterate with the author until the macro structure is approved. Allocate `PRT`/`CHP` IDs with
 `next-id` only once the shape is stable, to avoid burning IDs.
@@ -47,11 +50,27 @@ Iterate with the author until the macro structure is approved. Allocate `PRT`/`C
 ### 3. Pass 2: scenes
 For each chapter, write scenes per [outline-format.md](references/outline-format.md). Each scene
 states prerequisites (`Prerequisites: [[...]]`), when, where, POV, cast, the plot elements it
-advances, the facts and world rules it relies on, goal/conflict/outcome, beats, must-keep dialogue
-(if any), the change it produces, target length, and (for the resolving scene) `Denouement: true`.
+advances, the facts and world rules it relies on, graphics (`Graphics: [[GFX-...]]` or `[GFX: ...]`),
+goal/conflict/outcome, beats, must-keep dialogue (if any), the change it produces, target length,
+and (for the resolving scene) `Denouement: true`.
 Allocate `SCN` IDs with `next-id SCN`, saving between calls.
 
 While outlining:
+- **Deciding Graphics Placement & Visual Placeholders**:
+  - `novel-outline` is responsible for evaluating where graphics should be used across the narrative.
+  - Consult `story/style.md` > `## Graphics Guidelines` to audit scenes against visual triggers:
+    - *Spatial & Geographic Transitions*: Enter a new city, archipelago, fortress, or tactical waterway where layout clarifies movement.
+    - *Mechanical & Technical Complexity*: Physical apparatus, ship compartment cutaways, or machinery where prose explanation would stall pacing (the Friction Principle).
+    - *Dramatic & Structural Pivots*: Major turning points or confrontation layouts.
+    - *In-World Epistolary Artifacts*: Facsimiles of crucial letters, decoded telegrams, manifests, or clippings.
+  - Enforce the style's negative rules (no decorative filler, no talking heads, no premature spoiler reveals).
+  - Include asset references or functional placeholders:
+    - If a KB asset exists, link it: `- **Graphics:** [[GFX-001]]`.
+    - If an asset is needed but not yet cataloged, write a structured placeholder: `- **Graphics:** [GFX: <type> - <description>]` (e.g. `[GFX: Map - Harbor approach chart showing shoal hazards]`, `[GFX: Schematic - Wireless Marconi transmitter circuit]`, `[GFX: Document - Facsimile of unsigned letter with wax seal]`).
+  - **Activating Graphics in the Story DAG**:
+    Placing `[[GFX-xxx]]` or graphics placeholders in outline scenes explicitly attaches them to the **Story DAG**.
+    This ensures that downstream `novel-sync` renders only active visual assets, skipping inactive KB entities
+    to conserve AI tokens and enabling per-asset baseline drift tracking.
 - **Causality & Multiple Valid Serializations**:
   The story causality DAG defines a *partial order*, meaning there is **more than one valid serialization order**
   for the outline. Any sequence where every scene is preceded in reading order by all of its prerequisites is

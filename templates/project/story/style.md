@@ -128,6 +128,110 @@ TBD
      - Rules for definition length and style (concise, accessible, spoiler-free) -->
 TBD
 
+## Graphics Guidelines
+<!-- 
+Binding guidance for the novel-outline, novel-author, and graphics sync stages on when, where, 
+and how graphical assets (GFX) should be used, rendered, and embedded.
+-->
+
+### Intensity and Frequency
+<!-- 
+Controls the overall density and frequency of graphics across the novel:
+- Parameter choices:
+  - 'none': Pure text only; zero graphics.
+  - 'minimal': Sparingly (1–3 major assets book-wide, e.g. frontispiece / world map / climactic schematic).
+  - 'selective' (recommended default): Moderate (e.g. 1 per part or major multi-chapter arc; key maps, pivotal schematics, or chapter opening vignettes).
+  - 'rich' / 'frequent': Visual immersion (illustrated novel; maps for every journey, schematics for complex mechanisms, portraits for cast, chapter headers).
+Target asset budget: e.g. 1 per Part, maximum 6-8 across book.
+-->
+- **Intensity:** selective
+- **Target Budget:** 1 per part, maximum 6-8 across book
+
+### Rendering Styles
+
+#### Artistic Rendering Style
+<!-- 
+Governs emotional and narrative art: covers, character portraits, landscape vistas, chapter header vignettes, and dramatic scene illustrations:
+- Medium / Technique: e.g. Pen-and-ink cross-hatching, woodcut / steel engraving, charcoal chiaroscuro, graphite sketch, watercolor wash, vintage lithograph, or cinematic concept art.
+- Lighting & Tone: e.g. High-contrast chiaroscuro, stark industrial shadows, atmospheric fog, period-accurate Edwardian illustration aesthetic.
+- Color & Palette: Monochromatic (black ink on off-white parchment / cream paper for print/e-reader fidelity) vs. muted sepia vs. full-color digital.
+-->
+- **Medium:** Pen-and-ink with fine cross-hatching and linework (period 1910s editorial engraving style)
+- **Palette:** Monochromatic black ink on aged cream / off-white paper (e-ink and print friendly)
+- **Tone:** Atmospheric, high shadow contrast, somber realism
+
+#### Technical Rendering Style
+<!-- 
+Governs informative, spatial, and mechanical visualizations: maps, charts, architectural plans, ship cutaways, tactical battle plots, and schematics:
+- Drafting Aesthetic: e.g. Admiralty hydrographic survey cartography, vintage cyanotype blueprint, patent application line drafting, or clean modern vector schematic.
+- Linework & Precision: Crisp vector linework, hatching for landmasses/bulkheads, compass roses, scale bars with nautical miles/metric scales.
+- Typography & Callouts: Period-appropriate typography (e.g. Caslon or Baskerville serif for maps; technical monospaced/drafting sans-serif for blueprints); callout leaders and numeric keys.
+-->
+- **Medium:** Admiralty hydrographic survey cartography and period engineering patent drafting
+- **Palette:** Crisp black linework with subtle stippling and contour hatching
+- **Typography:** Serif cartographic labels, compass rose, soundings in fathoms, scale bar in nautical miles
+
+### Usage Rules and Triggers
+
+#### When to Use Graphics (Triggers)
+<!--
+Rules governing WHEN the novel-outline skill must place graphics in chapters and scenes:
+- Spatial & Geographic Transitions: When a new city, archipelago, harbor, fortress, or journey route is introduced where spatial layout clarifies plot movement.
+- Mechanical / Technical Complexity (The Friction Principle): When prose explanation of a technical apparatus (e.g. wireless Marconi apparatus, engine room boiler routing, orbital tether airlock) would bog down narrative pacing or cause spatial confusion.
+- Structural Pivots: Part openers, major chapter transitions, or pivotal tactical confrontations.
+- In-World Epistolary Artifacts: Facsimiles of crucial letters, decoded telegrams, nautical manifests, or newspaper clippings.
+-->
+- Introduce a nautical chart or map whenever the POV enters a new navigational territory or tactical body of water.
+- Introduce an architectural cutaway or schematic when physical deck layout or machinery operation is critical to scene stakes.
+- Introduce an in-world document facsimile when an encrypted message or official document is examined as a primary plot clue.
+
+#### When NOT to Use Graphics (Negative Rules)
+<!--
+- Decorative Clutter: Do not add illustrations purely for decorative filler that does not advance spatial or dramatic comprehension.
+- Talking Heads: Never illustrate standard two-person dialogue scenes.
+- Spoiler Prevention: Never place a graphic that visually reveals a plot twist, secret identity, or hidden room before the reader reaches the text reveal.
+- Ambiguity Protection: Do not illustrate moments intended to remain ambiguous, interior, or psychologically subjective (e.g. supernatural dread or internal grief).
+-->
+- Avoid illustrating conversational dialogue or character emotional reactions (let the prose carry interiority).
+- Never depict an object or location before the POV character discovers it.
+- Never use modern digital UI styles or computer-generated 3D aesthetics in historical fiction.
+
+### Additional Specifications
+
+#### Placement and Layout
+<!-- 
+Conventions for where graphics sit relative to prose:
+- Front / Back matter plates: Full-page overview map in front matter; glossary diagrams in back matter.
+- Chapter headers: 16:9 banner or 1:1 vignette immediately below chapter title before opening prose.
+- In-scene inline figures: Centered full-width break between scene beats with figure caption below.
+-->
+- **Placement:** Chapter opening header for geographic maps; inline between scene beats for tactical schematics and in-world artifacts.
+
+#### Aspect Ratio and Dimensions
+<!-- 
+Standardized dimensions for visual consistency across rendering:
+- Landscapes / Maps: 16:9 or 3:2 landscape orientation.
+- Vignettes & Portraits: 1:1 square or 4:5 portrait.
+- Full Plates: 2:3 book-page ratio (e.g. 1200x1800 px).
+-->
+- **Aspect Ratio:** 16:9 for cartography and landscape plates; 1:1 for chapter header vignettes.
+
+#### Text Labeling and Localization Policy
+<!-- 
+Policy for handling text within graphics:
+- Text-minimal preference: Favor numeric/alphabetical callout keys (e.g. 1, 2, 3) with full descriptions in prose captions, allowing graphics to be language-agnostic across locales.
+- Localized variants: When graphics contain translated text labels (e.g. place names on maps), generate localized assets (GFX-xxx.<locale>.png) matching the language of each manuscript subdirectory.
+-->
+- **Policy:** Text-minimal where feasible. For cartographic maps with place names, provide localized assets with translated place names according to target locales.
+
+#### Visual Continuity and Symbol Library
+<!-- 
+Ensures visual cohesion across multiple assets:
+- Consistent cartographic symbols (depth soundings, lighthouses, anchorages, compass rose).
+- Consistent character likeness and garment details matching CHR continuity specs across portrait or scene assets.
+-->
+- **Continuity:** Maintain identical nautical symbol keys, compass rose designs, and line-weight hierarchy across all map assets.
+
 # Locale: en-US
 <!-- Specific conventions for en-US:
      - American English spelling and punctuation (serial commas, double quotes)

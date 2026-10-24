@@ -265,6 +265,7 @@ Built in `outline/outline.md`, it organizes the book into Parts (`PRT`), Chapter
 - **Plot:** escalates [[PLT-001]]; pays off clue from SCN-006 ([[PLT-005]])
 - **Facts:** [[FCT-030]], [[FCT-031]]
 - **World:** (if speculative) [[WLD-002]]
+- **Graphics:** [[GFX-002]] (or placeholder [GFX: Bulkhead cutaway schematic])
 - **Goal / conflict / outcome:** Elena wants to reach Karl's cabin; barred by a steward; slips past but finds it empty.
 - **Beats:**
   1. A faint shudder through the deck; card players ignore it.
@@ -312,6 +313,13 @@ and `specnovel.py check`:
 1. **Cycle Detection**: Validates that no circular causality exists (the graph is truly a DAG).
 2. **Reading Order Coherence**: Validates that all prerequisites precede their dependent scenes in the outline.
 3. **Essentiality to Root**: Validates that every scene and plot element has a directed path to the root denouement.
+
+#### Outline-Driven Graphics Placement
+The `novel-outline` skill takes responsibility for deciding where visual assets are placed in chapters and scenes:
+- **Style-Guided Selection**: Audits narrative beats against `story/style.md` > `## Graphics Guidelines` (checking the intensity budget, artistic/technical rendering styles, and visual triggers).
+- **Triggers**: Identifies spatial and geographic shifts (new navigational areas, harbor approaches), complex machinery and architectural cutaways (the Friction Principle), and in-world epistolary documents (telegrams, ciphers, letters).
+- **Negative Rules**: Enforces bans on decorative visual clutter, static talking-head scenes, and premature plot spoilers.
+- **Traceability & DAG Activation**: Embeds existing asset links (`- **Graphics:** [[GFX-001]]`) or functional placeholders (`- **Graphics:** [GFX: Bulkhead cutaway schematic]`). By placing graphics in the outline, they are formally bound to the **Story DAG**, ensuring token-optimized rendering during `specnovel.py impact --stage graphics` while skipping unreferenced KB assets.
 
 ---
 
@@ -544,7 +552,7 @@ IDs are permanent and never reused:
 The file `story/style.md` is a **mandatory, binding input**. The prose rendering engine refuses to generate
 the manuscript if this file is missing or contains fewer than 400 words of concrete guidance.
 
-It governs 15 specific aspects of prose craft:
+It governs prose craft and visual asset rules across 17 structured domains:
 1. **Narrative Stance**: POV person, psychic distance, and head-hopping prohibitions.
 2. **Tense**: Past vs. present; flashback mechanics.
 3. **Narrator Reliability & Secrets**: Dramatic irony handling.
@@ -560,6 +568,8 @@ It governs 15 specific aspects of prose craft:
 13. **Per-POV Variations**: Distinct linguistic registers for different viewpoint characters.
 14. **Anti-Patterns (Forbidden Ruts)**: Explicitly banned clichés, filter words, and generic AI idioms.
 15. **Voice Anchors**: 2–5 exemplar passages illustrating the target voice for the agent to emulate.
+16. **Glossary Guidelines (`## Glossary Guidelines`)**: Criteria for automatic term discovery and candidate inclusion.
+17. **Graphics Guidelines (`## Graphics Guidelines`)**: Intensity parameter (`none`, `minimal`, `selective`, `rich`), artistic rendering styles (medium, palette, lighting), technical rendering styles (cartography, schematics, linework), usage triggers, negative rules, placement conventions, aspect ratios, and text localization policy.
 
 ---
 
