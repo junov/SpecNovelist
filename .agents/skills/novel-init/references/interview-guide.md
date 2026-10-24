@@ -16,6 +16,11 @@ configuration specification, and a seeded knowledge base. The agent leads; the a
 - **Record as you go**: after each round, tell the author which file/section each answer lands in.
 - **Defer research**: when an answer depends on facts ("Could a woman be a ship's surgeon in
   1912?"), log an `RQ` item with priority, and continue with a provisional assumption.
+- **Always Provide Decline / Skip Options for Optional Information**:
+  - Distinguish clearly between **[Required]** items (e.g. logline, core protagonist, primary language, working title) and **[Optional]** items (e.g. legal name, author email/URL, subtitle, foreword, epigraph, dedication, historical note, secondary subplots, translation targets, or sample excerpts).
+  - Every question concerning optional fields or secondary creative decisions must explicitly offer an option to decline, skip, or defer (e.g. `"Skip / Leave blank"`, `"Decide later"`, or `"None"`).
+  - Never pressure or force the author to supply optional metadata; if declined, the agent applies clean empty/default values so `story/config.md` and `story/brief.md` remain valid and clean.
+  - If narrative items are deferred (e.g. subplots or minor characters), log them under `## Open questions` in `story/brief.md` rather than stalling the interview.
 - **Produce Complete, Fully Valid Artifacts**: The onboarding interview must never leave `story/config.md`
   or `story/style.md` as empty or generic placeholders. When the interview finishes, both files must
   contain rich, pertinent information that passes `specnovel.py check` with zero errors or warnings.
@@ -49,92 +54,95 @@ flowchart TD
 ```
 
 ### Phase 0: Experience Calibration & Author Identity
-1. **Experience level**:
+1. **Experience level** [Required]:
    - Ask the user: *"Are you a novice novelist (writing your first book or new to storytelling mechanics), an intermediate writer (familiar with story structures and drafts), or an experienced/published author? Or feel free to describe your writing background."*
    - Set the agent's scaffolding level according to the matrix above.
 2. **Author Identity** (populates `story/config.md`):
-   - Author name (pen name or public attribution).
-   - Legal name (optional, for copyright if different).
-   - Contact email and author website/URL (optional).
+   - **Author name** [Required]: Pen name or public attribution.
+   - **Legal name** [Optional]: For copyright/legal records if different. **Provide explicit option: `"Skip / Same as author name"`**.
+   - **Contact email & URL** [Optional]: **Provide explicit option: `"Skip / Leave blank"`**.
 3. **Language & Translations** (populates `story/config.md`):
-   - Primary language/locale (e.g. `en-US`, `en-GB`, `fr-FR`).
-   - Any planned translation target languages (e.g. `fr-FR`, `es-ES`, `de-DE`).
+   - **Primary language/locale** [Required]: (e.g. `en-US`, `en-GB`, `fr-FR`).
+   - **Planned translation targets** [Optional]: **Provide explicit option: `"Primary language only / No translations for now"`**.
 
 ### Phase 1: Premise, Scope & Publication Budget
-1. **Logline**: *Who* wants *what*, *against what opposition*, *with what at stake*? (Offer a drafted logline based on synopsis).
+1. **Logline** [Required]: *Who* wants *what*, *against what opposition*, *with what at stake*? (Offer a drafted logline based on synopsis).
    - *For Novices*: Explain what a logline is and provide an example from a classic like *The Hunger Games* or *The Godfather*.
-2. **Genre & Comps**: Genre/subgenre, target audience (Adult, YA, etc.), and 2-4 comparable titles.
+2. **Genre & Comps**:
+   - **Genre/subgenre & audience** [Required]: Core genre and readership (Adult, YA, etc.).
+   - **Comparable titles (Comps)** [Optional]: **Provide explicit option: `"Skip comps / None"`**.
 3. **Word Budget & Scope** (feeds `story/config.md` and `story/brief.md`):
-   - Target word count (recommend by genre: e.g. Mystery/Thriller 80-90k, Literary 80-100k, Epic Sci-Fi/Fantasy 100-140k).
-   - Budget tolerance percentage (typically 10% or 15%).
-   - Approximate chapter count and target chapter length (e.g. 25-30 chapters at 3,000-4,000 words each).
-4. **Working Title & Subtitle** (feeds `story/config.md` and `story/brief.md`).
+   - **Target word count** [Required]: (Recommend by genre: e.g. Mystery/Thriller 80-90k, Literary 80-100k, Epic Sci-Fi/Fantasy 100-140k).
+   - **Tolerance percentage & chapter targets** [Optional]: (Offer standard default: 10% tolerance, 3,000-word scenes; **provide option: `"Use recommended defaults"`**).
+4. **Working Title & Subtitle**:
+   - **Working Title** [Required]: (Feeds `story/config.md` and `story/brief.md`).
+   - **Subtitle** [Optional]: **Provide explicit option: `"No subtitle / Skip"`**.
 
 ### Phase 2: Setting, Research Scope & Back Matter
-1. **Settings**: For each setting, define location, era/date range, and **type**:
+1. **Settings** [Required]: For each setting, define location, era/date range, and **type**:
    - *Historical*: Specify period constraints.
    - *Contemporary*: Fix an "as of" date (e.g. Autumn 2024).
    - *Futuristic*: Extrapolate from specific present-day trends.
-2. **Research Rigor**:
+2. **Research Rigor** [Required]:
    - Strict accuracy, accurate-with-documented-liberties (recommended for historical fiction), or loose/atmospheric.
 3. **Front & Back Matter Decisions** (feeds `story/config.md`):
-   - Foreword: Will the novel have a foreword or preface? (Reference file path in `story/`).
-   - Historical Note / Author's Note: Does the author want an appendix explaining factual liberties or historical context?
-   - Glossary: Toggle for technical, nautical, or invented terms (`include_glossary: true`).
-   - Bibliography: Toggle for auto-generated bibliographic references (`include_bibliography: true`).
-4. **Known Research Needs**:
-   - Technological, medical, legal, linguistic, or historical topics to research (seeded into `kb/research/questions.md`).
+   - **Foreword / Preface** [Optional]: Does the novel have an introductory foreword or preface? **Provide explicit option: `"No foreword / Skip"`**.
+   - **Historical Note / Afterword** [Optional]: Appendix explaining factual liberties or historical context? **Provide explicit option: `"No historical note / Decide later"`**.
+   - **Glossary & Bibliography toggles** [Optional]: (Offer recommended default: `true`; **provide option: `"Disable glossary/bibliography"`**).
+   - **Dedication / Epigraph** [Optional]: **Provide explicit option: `"Skip / Leave blank"`**.
+4. **Known Research Needs** [Optional / Open Backlog]:
+   - Technological, medical, legal, linguistic, or historical topics to research (seeded into `kb/research/questions.md`; **provide option: `"None known yet; convert provisional placeholders during research"`**).
 
 ### Phase 3: Cast
-1. **Protagonist(s)**: External goal (what they want), internal need (what they lack), emotional flaw/wound, and arc trajectory (from -> to).
+1. **Protagonist(s)** [Required]: External goal (what they want), internal need (what they lack), emotional flaw/wound, and arc trajectory (from -> to).
    - *For Novices*: Explain the difference between an external goal ("solve the murder") and an internal need ("learn to trust again").
-2. **Antagonist / Opposing Force**: What they want and why they believe their cause is just.
-3. **Supporting Cast**: Key secondary characters, their narrative function, and their relationship to the protagonist.
-4. **POV Allocation**: Viewpoint characters and why each earns a distinct POV.
-5. **Names**: Period- and culture-appropriate naming conventions.
+2. **Antagonist / Opposing Force** [Required]: What they want and why they believe their cause is just.
+3. **Supporting Cast** [Optional / Incremental]: Key secondary characters, their narrative function, and relationship to protagonist. **Provide explicit option: `"Focus on protagonist and antagonist for now; add supporting cast in outline stage"`**.
+4. **POV Allocation** [Required]: Viewpoint characters and why each earns a distinct POV.
+5. **Names & Naming Conventions** [Optional / Deferrable]: Period- and culture-appropriate naming. If author hasn't chosen, **provide option: `"Use provisional functional placeholders (e.g. '[Protagonist]', '[Harbor Master]') to research names later"`**.
 
 ### Phase 4: Plot Architecture
-1. **Structural Model**:
+1. **Structural Model** [Required]:
    - Recommend a model suited to the genre (e.g. [Three-Act Structure](https://en.wikipedia.org/wiki/Three-act_structure), [Four-Act / Midpoint Mirror](https://en.wikipedia.org/wiki/Dramatic_structure), [Seven-Point Story Structure](https://en.wikipedia.org/wiki/Seven-point_story_structure), Mystery Investigation Spine, or [Kishōtenketsu](https://en.wikipedia.org/wiki/Kish%C5%8Dtenketsu)).
    - *For Novices*: Briefly explain the selected model and why it works for their genre.
-2. **Key Narrative Milestones**:
+2. **Key Narrative Milestones** [Required]:
    - Inciting incident, first act break, midpoint reversal, dark night of the soul, climax, and resolution.
-3. **Subplots & Revelations**:
-   - Secondary relationship arcs or thematic subplots; key secrets and reveal timing.
-4. **The Ending**:
+3. **Subplots & Revelations** [Optional / Deferrable]:
+   - Secondary relationship arcs or thematic subplots. **Provide explicit option: `"Defer subplots to outline stage / Log under open questions"`**.
+4. **The Ending** [Required]:
    - Definitive resolution: what each viewpoint character gains, loses, and becomes.
 
 ### Phase 5: Theme, Tone & Content Boundaries
-1. **Thematic Questions & Motifs**:
+1. **Thematic Questions & Motifs** [Required]:
    - Core dramatic question the novel interrogates; recurring symbols or motifs.
-2. **Tone & Emotional Trajectory**:
+2. **Tone & Emotional Trajectory** [Required]:
    - Overall mood (e.g. gritty, melancholic, satirical, suspenseful) and tone shifts across acts.
-3. **Content Boundaries**:
-   - Limits on violence, sensuality, language, depiction of historical prejudice, or sensitive subjects.
+3. **Content Boundaries** [Optional]:
+   - Limits on violence, sensuality, language, or sensitivity considerations. **Provide explicit option: `"Standard genre conventions / No special restrictions"`**.
 
 ### Phase 6: Voice & Style Contract (feeds `story/style.md`)
 The resulting `story/style.md` must be a **concrete, binding style guide** (minimum 400 words, typically 1,000+ words).
-1. **Narrative Stance & Distance**:
+1. **Narrative Stance & Distance** [Required]:
    - POV person (first person, close third, omniscient).
    - Psychic distance policy (how deep into the character's thoughts the camera sits).
    - Prohibition against head-hopping.
    - *For Novices*: Explain [Free Indirect Discourse](https://en.wikipedia.org/wiki/Free_indirect_speech) vs. direct tagged thought, and explain why accidental head-hopping jars readers.
-2. **Tense & Flashback Mechanics**:
+2. **Tense & Flashback Mechanics** [Required]:
    - Past tense vs. present tense; transition conventions for memories or flashbacks.
-3. **Diction, Rhythm & Period Register**:
+3. **Diction, Rhythm & Period Register** [Required]:
    - Sentence length distribution, cadence, vocabulary register, and policy on anachronisms.
-4. **Dialogue Craft**:
+4. **Dialogue Craft** [Required]:
    - Tag policy (*"said/asked only; prefer action beats over adverb tags"*), dialect rendering, and subtext.
-5. **Sensory Grounding & The Friction Principle**:
+5. **Sensory Grounding & The Friction Principle** [Required]:
    - Priority of senses (sound, smell, temperature, texture); researched facts must be delivered through physical friction and action, never through conversational lecturing.
-6. **Locale-Specific Sections (`# Locale: <locale>`)**:
+6. **Locale-Specific Sections (`# Locale: <locale>`)** [Required]:
    - For every language configured in `story/config.md`, define typographical rules (e.g. French guillemets and dialogue dashes vs. English quotes), punctuation spacing, and idioms.
-7. **Glossary Guidelines (`## Glossary Guidelines`)**:
+7. **Glossary Guidelines (`## Glossary Guidelines`)** [Required]:
    - Define concrete criteria for terms that should be cataloged in `kb/glossary/` (e.g. historical jargon, invented tech, period idioms).
-8. **Forbidden Anti-Patterns**:
+8. **Forbidden Anti-Patterns** [Required]:
    - Explicitly ban modern clichés, generic AI turns of phrase (*"a testament to", "tapestry of", "she didn't know she was holding"*), and sensory filter words (*"she heard", "he watched"*).
-9. **Voice Anchors**:
-   - Authoritative exemplar passages illustrating the intended prose texture.
+9. **Voice Anchors & Sample Passages**:
+   - Provide 2-3 exemplar voice anchor passages. If the author has their own written excerpts, they may supply them. **Provide explicit option: `"Have the agent draft exemplar voice anchors based on selected touchstone authors / Skip custom excerpts"`**.
 
 ### Phase 7: Synthesis, Schema Validation & Approval
 1. **Populate Specifications**:

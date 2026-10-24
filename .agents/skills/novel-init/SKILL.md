@@ -82,6 +82,12 @@ Follow [interview-guide.md](references/interview-guide.md). Rules:
   text) when available.
 - **Gather Project Configuration Data**: Collect Author Identity (name, email, legal name), target languages
   (primary and translations), front/back matter toggles (foreword, glossary, bibliography), and word budget.
+- **Always Provide Decline / Skip Options for Optional Fields**: Distinguish clearly between required and
+  optional inputs. For all optional metadata (legal name, contact info, subtitle, foreword, dedication, epigraph,
+  historical notes, translation targets, secondary subplots, or custom voice samples), explicitly provide an
+  option to decline or skip (e.g. *"Skip / Leave blank"*, *"Decide later"*, or *"None"*). If declined, populate
+  clean empty/default values so `story/config.md` remains valid, and log deferred narrative items under
+  `story/brief.md` > `## Open questions`.
 - **Never research during the interview** beyond quick sanity checks; collect research needs as
   `RQ` items instead. Deep research is `novel-research`'s job.
 - Stop interviewing when the brief and config have no blocking gaps; leave the rest in `## Open questions`.
@@ -143,6 +149,7 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
 > `specnovel.py delta --stage brief` and propagated via `novel-sync`, without re-running `novel-init`.
 
 ## Rules
+- Always provide a clear way for the user to decline entering information that is optional (never force optional metadata or stall on unsupplied details).
 - Never edit `story/synopsis.md` or `story/style.md` without the author's explicit approval.
 - Never fabricate researched facts or sources; route every factual need to an `RQ` item.
 - Keep KB entries short at this stage; they grow during research and outlining.
