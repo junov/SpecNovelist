@@ -204,6 +204,9 @@ When the author prompts `novel-init`, the agent executes an **interactive, agent
 The story bible is cataloged into dedicated markdown files under `kb/`. Every item receives a permanent
 alphanumeric ID (`PREFIX-NNN`) and is cross-referenced using wiki-links (`[[CHR-001]]` or `[[CHR-001|Elena]]`).
 The agent assists the author in fleshing out character goals/flaws, setting layouts, and plot threads.
+- **Mandatory Time & Place on Plot Elements**: Every plot element (`PLT`) must specify valid time (e.g. `Time:`)
+  and place (e.g. `Place:`) metadata. Automated checks (`specnovel.py check`) enforce this rule, ensuring that
+  `novel-write` has the spatiotemporal boundaries needed to clarify transitions.
 
 #### Authoritative Online Research (`novel-research`)
 For all historical, scientific, legal, geographical, and contemporary facts, the agent executes online research:
@@ -312,7 +315,7 @@ Once the abridged draft is approved, `novel-write` expands each scene into the f
 Prose rendering is strictly guided by **three inputs**:
 1. **The Abridged Scene (`abridged/`)**: The unquestioned authority on plot events, decisions, and dialogue.
 2. **The Style Guide (`story/style.md`)**: The binding authority on prose craft (see below).
-3. **The Knowledge Base (`kb/`)**: Provides sensory palettes from `PLC`, character speech tics and interior wounds from `CHR`, authentic tactile details from `FCT`, and physical constraints from `WLD`.
+3. **The Knowledge Base (`kb/`)**: Provides sensory palettes from `PLC`, character speech tics and interior wounds from `CHR`, authentic tactile details from `FCT`, physical constraints from `WLD`, and spatiotemporal boundaries from `PLT` (used to clarify scene-to-scene transitions in time and space).
 
 The generated prose is fully realized, immersive literary fiction with **zero visible metadata** (all `[[ID]]`
 tags are stripped from the prose).

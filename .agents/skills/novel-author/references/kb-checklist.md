@@ -14,7 +14,7 @@ suggestions and never silently change the author's intent.
 - [ ] Places: real vs fictional is declared; the sensory palette is concrete (not "bustling").
 - [ ] World rules: have a **Basis** (facts or "invented"), and limits/costs as well as powers.
 - [ ] Timeline: dates are consistent with character ages, travel times, and other `TML` entries.
-- [ ] Plot elements: state a dramatic question and stakes; reveals are planned.
+- [ ] Plot elements: carry explicit, valid **Time** and **Place** metadata (e.g. `[[TML-...]]` or date/span, `[[PLC-...]]` or locations) to guide prose transitions; state dramatic question, stakes, reveals, and causality prerequisites.
 - [ ] No duplicated information that already lives in another entry (link it instead).
 
 ## Per change (before accepting the plan)
@@ -27,7 +27,7 @@ suggestions and never silently change the author's intent.
 
 ## Severity
 - **BLOCKER**: breaks continuity or traceability (dangling reference, duplicate ID,
-  contradiction with an established fact, unsourced fact).
+  missing PLT time/place metadata, contradiction with an established fact, unsourced fact).
 - **WARNING**: likely to cause drift or weak scenes (missing continuity details, vague palette,
   rule without limits).
 - **NIT**: consistency and style.

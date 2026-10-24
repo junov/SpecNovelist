@@ -18,6 +18,7 @@ by AI writing agents.
   - Characters (`CHR`), Places (`PLC`), Organizations (`ORG`), Objects (`OBJ`), Plot Elements (`PLT`),
     Themes (`THM`), World Rules (`WLD`), Timeline Events (`TML`), Researched Facts (`FCT`), Sources (`SRC`),
     and Research Questions (`RQ`).
+  - Plot elements (`PLT`) must carry valid time and place metadata to orient spatiotemporal transitions.
   - Cataloged with unique, permanent IDs (`PREFIX-NNN`) and cross-referenced with `[[ID]]` wiki-links.
 - **`outline/`**: **The Skeleton of the Novel in Reading Order.**
   - Parts (`PRT`), Chapters (`CHP`), and Scenes (`SCN`).

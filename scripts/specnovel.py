@@ -197,6 +197,31 @@ class Section:
     def has_field(self, name: str) -> bool:
         return re.search(FIELD_RE.format(name=name), self.text, re.I | re.M) is not None
 
+    def field_value(self, *names: str) -> Optional[str]:
+        """Extract the text value of a named field (e.g. 'time', 'place')."""
+        for name in names:
+            m = re.search(r"^\s*[-*]?\s*\**" + re.escape(name) + r"\**\s*:\**\s*(.*)$", self.text, re.I | re.M)
+            if m:
+                val = COMMENT_RE.sub("", m.group(1)).strip()
+                if val:
+                    return val
+                # Check for subsequent indented list or continuation lines
+                lines_after: List[str] = []
+                in_field = False
+                for line in self.lines:
+                    if re.match(r"^\s*[-*]?\s*\**" + re.escape(name) + r"\**\s*:\**", line, re.I):
+                        in_field = True
+                        continue
+                    if in_field:
+                        clean_line = COMMENT_RE.sub("", line).strip()
+                        if re.match(r"^\s+[-*]\s+", line) or (line.startswith(" ") and clean_line):
+                            lines_after.append(clean_line)
+                        elif re.match(r"^\s*[-*]?\s*\**[a-zA-Z0-9_-]+\**\s*:\**", line) or re.match(r"^#{1,6}\s+", line):
+                            break
+                if lines_after:
+                    return " ".join(lines_after).strip()
+        return None
+
     def ref_ids(self) -> Set[str]:
         return {r for r, _ in self.refs}
 
@@ -678,6 +703,15 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     open_rq = [s for s in plan.of_type("RQ") if re.search(FIELD_RE.format(name="status") + r"\s*\**\s*open", s.text, re.I | re.M)]
     if open_rq:
         infos.append(f"{len(open_rq)} open research question(s): " + ", ".join(s.id for s in open_rq))
+
+    # plot integrity (time and place metadata)
+    for s in plan.of_type("PLT"):
+        time_val = s.field_value("time", "when", "span", "timeline", "period", "date")
+        if not time_val or (time_val.startswith("<") and time_val.endswith(">")) or time_val.lower() in {"todo", "tbd", "unspecified", "none"}:
+            errors.append(f"plot element {s.id} is missing valid time metadata (e.g. 'Time:' or 'When:') ({s.location})")
+        place_val = s.field_value("place", "where", "setting", "location")
+        if not place_val or (place_val.startswith("<") and place_val.endswith(">")) or place_val.lower() in {"todo", "tbd", "unspecified", "none"}:
+            errors.append(f"plot element {s.id} is missing valid place metadata (e.g. 'Place:' or 'Where:') ({s.location})")
 
     # usage
     outline_refs: Set[str] = set()

@@ -32,7 +32,40 @@ and the narrative voice.
 
 ---
 
-## 2. Weaving Researched Facts (`FCT`) Seamlessly
+## 2. Clarifying Time and Space Transitions from `PLT` Metadata
+
+A primary cause of reader disorientation in multi-thread fiction is ambiguous spatio-temporal transitions:
+jumping between scenes without clearly establishing **how much time has elapsed** or **where the character is now**.
+
+Each plot element (`PLT`) in SpecNovelist is required to carry explicit **Time** and **Place** metadata
+(e.g., `Time: 1912-04-02 to 1912-04-14`, `Place: [[PLC-001]] to [[PLC-002]]`). When rendering prose for scenes
+advancing these threads, `novel-write` utilizes this metadata to construct immediate, seamless reader orientation.
+
+### Techniques for Spatiotemporal Transitions
+
+1. **Concrete Temporal Markers in Scene Openings**:
+   - Establish elapsed time within the first two sentences using concrete sensory or environmental indicators
+     rather than abstract dates:
+     - *Weak / Disorienting*: "Elena was in the telegraph office. She tapped her fingers on the counter."
+     - *Oriented*: "By Thursday evening, three days after Karl’s courier slipped out of Hamburg, the telegraph
+       office smelled of damp greatcoats and stale tobacco."
+   - Employ physiological time markers: stiffness from travel, stubble, fading bruises, cooling stoves, candle stubs,
+     or the chiming of specific city bells.
+
+2. **Crossing Spatial Thresholds**:
+   - When transitioning to a new `Place:` (`PLC`), show the physical arrival or movement across the boundary:
+     - Describe the acoustic shift (the roar of the harbor basin giving way to the muffled ticking of an inner office).
+     - Ground the temperature and air quality immediately (the sharp, salt-rimed wind off the Elbe vs. coal fumes).
+     - Show the physical toll of distance: grit in clothes, sea legs, horse lather, railway soot on linen cuffs.
+
+3. **Bridging Thread Continuity**:
+   - Remind the reader of the active `PLT` thread's progression through time and space.
+   - Filter the time/place shift through the viewpoint character's urgent calculation:
+     *"Twelve hours left before the tide turned in Cuxhaven, and Karl was still three leagues upriver."*
+
+---
+
+## 3. Weaving Researched Facts (`FCT`) Seamlessly
 
 A fatal flaw in historical, scientific, or contemporary fiction is the **infodump** (characters
 explaining history or science to each other, or the narrator stopping the story to deliver a mini-essay).
@@ -55,7 +88,7 @@ explaining history or science to each other, or the narrator stopping the story 
 
 ---
 
-## 3. Banishing Generic AI Prose Habits
+## 4. Banishing Generic AI Prose Habits
 
 `story/style.md` lists forbidden anti-patterns. AI writing agents tend to fall into recurring
 stylistic ruts unless actively checked. Guard against these universal pitfalls:
@@ -74,7 +107,7 @@ stylistic ruts unless actively checked. Guard against these universal pitfalls:
 
 ---
 
-## 4. Voice Anchors & Style Compliance
+## 5. Voice Anchors & Style Compliance
 
 Before rendering any scene:
 1. Open `story/style.md` to `## 15. Voice anchors`.
@@ -88,11 +121,12 @@ Before rendering any scene:
 
 ---
 
-## 5. Clean Prose Checklist
+## 6. Clean Prose Checklist
 
 Before saving to `manuscript/CHP-xxx.md`:
 - [ ] Are all plot events from `abridged/` present without deviation?
 - [ ] Is all key dialogue preserved word-for-word?
+- [ ] Are time elapsed and setting shifts immediately clear from the opening sentences (informed by `PLT` time/place)?
 - [ ] Are all raw `[[ID]]` tags removed from the narrative text?
 - [ ] Is the scene within ±15% of its target word count?
 - [ ] Are period details grounded in sourced `FCT`s?

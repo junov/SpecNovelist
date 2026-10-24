@@ -74,6 +74,7 @@ For each target scene (`SCN-xxx`):
    - Anti-patterns and banned words/tropes.
    - Touchstone passages and voice anchors.
 3. **Read referenced `kb/` entries**:
+   - `PLT`: Time and Place metadata of plot elements advanced in this scene to orient temporal duration and geography.
    - `PLC`: Sights, sounds, smells, temperatures, and spatial boundaries.
    - `CHR`: Physical mannerisms, emotional state, secrets, and speech habits.
    - `FCT`: Sourced textures, period-accurate objects, specialized vocabulary, procedures.
@@ -84,6 +85,10 @@ For each target scene (`SCN-xxx`):
 Draft the prose under `manuscript/CHP-xxx.md`:
 - **Preserve 100% of the Plot and Dialogue**: Retain all dialogue lines from the abridged draft,
   enriching beats with physical action, micro-expressions, pauses, and subtext.
+- **Clarify Time and Space Transitions**: Leverage the Time and Place metadata from advanced `PLT`
+  items (alongside scene `When:` and `Where:`) to anchor the reader. Explicitly render temporal distance
+  (hours, days, seasons elapsed), journey physicalities (fatigue, soot, distance traveled), and the
+  sensory threshold of entering the new location.
 - **Sensory Immersion**: Anchor the reader in the physical reality of the scene using the sensory
   palette from `PLC` and historical details from `FCT`. Avoid generic descriptions.
 - **Filter Exposition through the POV**: Researched facts must never read like encyclopedia

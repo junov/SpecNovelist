@@ -128,6 +128,8 @@ agents consult for continuity.
 ### Plot element (`PLT`)
 ```markdown
 # PLT-001: Elena's search for her brother (main plot)
+- **Time:** [[TML-002]] (1912-04-02 morning -> 1912-04-15 dawn)
+- **Place:** [[PLC-001]], [[PLC-002]] (Hamburg harbor -> North Atlantic)
 - **Prerequisites:** [[PLT-002]], [[FCT-001]] (causal requirements or conditions; checked in story DAG)
 - **Kind:** main plot | subplot | character arc | mystery | secret | romance | setup/payoff
 - **Dramatic question:** Will Elena find Karl before the ship sails?
@@ -139,6 +141,13 @@ agents consult for continuity.
 ```
 Where each beat lands is **not** stored here: `specnovel.py trace PLT-001` lists the scenes that
 reference it in reading order. This avoids duplicated, drifting information.
+
+> [!IMPORTANT]
+> **Mandatory Time & Place Metadata**: Every `PLT` item MUST carry explicit `Time:` (or `When:`, `Span:`)
+> and `Place:` (or `Where:`, `Setting:`) metadata. This is strictly verified by `specnovel.py check`.
+> This metadata directly informs the `novel-write` skill so it can craft smooth, clear spatiotemporal
+> transitions (establishing elapsed time, travel distances, setting shifts, and sensory grounding) to
+> help the reader follow the flow of the story.
 
 > [!IMPORTANT]
 > **Story Causality**: When a `PLT` element specifies `Prerequisites:`, `specnovel.py dag` ensures that

@@ -54,6 +54,7 @@ Verifies:
 - **Integrity & References**:
   - All cataloged IDs are unique across the project.
   - No dangling wiki-links (`[[ID]]`) exist.
+  - All plot elements (`PLT`) carry valid Time and Place metadata for transition clarity.
   - All researched facts (`FCT`) cite valid source records (`SRC`).
   - Every source has an accessible URL or full bibliographic citation.
   - Derived chapters and scenes in `abridged/` and `manuscript/` match the outline in order and hierarchy.

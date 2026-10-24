@@ -268,8 +268,11 @@ class ProjectTest(unittest.TestCase):
         self.assertTrue(any("inessential element: SCN-004 has no causal path to the root denouement (SCN-003)" in e for e in res["errors"]))
 
     def test_dag_with_plot_element_prerequisites(self):
-        # Add a plot element with prerequisites that is advanced in scenes
-        self.write("kb/plot/PLT-001-escape.md", "# PLT-001: The Escape\n- **Prerequisites:** [[FCT-001]]\n")
+        # Add a plot element with prerequisites and valid time/place metadata that is advanced in scenes
+        self.write(
+            "kb/plot/PLT-001-escape.md",
+            "# PLT-001: The Escape\n- **Time:** April 1912\n- **Place:** [[PLC-001]]\n- **Prerequisites:** [[FCT-001]]\n"
+        )
         plot_outline = OUTLINE.replace(
             "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]]\n",
             "#### SCN-002: Karl refuses\n- **Prerequisites:** [[SCN-001]], [[PLT-001]]\n- **Plot:** [[PLT-001]]\n"
@@ -282,6 +285,25 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("PLT-001", dag_res["nodes"])
         self.assertIn("FCT-001", dag_res["nodes"])
+
+    def test_plt_missing_time_metadata(self):
+        self.write("kb/plot/PLT-001-escape.md", "# PLT-001: The Escape\n- **Place:** [[PLC-001]]\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("plot element PLT-001 is missing valid time metadata" in e for e in res["errors"]))
+
+    def test_plt_missing_place_metadata(self):
+        self.write("kb/plot/PLT-001-escape.md", "# PLT-001: The Escape\n- **Time:** 1912-04-12\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("plot element PLT-001 is missing valid place metadata" in e for e in res["errors"]))
+
+    def test_plt_placeholder_metadata_fails(self):
+        self.write("kb/plot/PLT-001-escape.md", "# PLT-001: The Escape\n- **Time:** <e.g. 1912>\n- **Place:** <location>\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("plot element PLT-001 is missing valid time metadata" in e for e in res["errors"]))
+        self.assertTrue(any("plot element PLT-001 is missing valid place metadata" in e for e in res["errors"]))
 
     def test_stats_and_compile(self):
         self.write("manuscript/CHP-001.md", ABRIDGED_1.replace("## SCN-002", "<!-- note [[CHR-002]] -->\n## SCN-002"))
