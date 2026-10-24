@@ -109,58 +109,59 @@ The agent will lead the structured interview:
 
 ---
 
-### Step 4: Automatically Convert Placeholders into Research Questions (`RQ`)
+### Step 4: Convert Placeholders into Research Questions (`RQ`) (Fully Automated)
 
-You do not need to manually write research questions for each unknown detail. SpecNovelist provides an **automated placeholder extraction engine** built directly into `specnovel.py`.
+In traditional workflows, turning rough notes into an organized research queue requires tedious manual labor: copying snippets into a separate document, formulating question titles, numbering entries, and cross-referencing files.
 
-#### 1. Scan Untracked Placeholders
-Run `specnovel.py placeholders` to inspect all provisional elements detected across `story/`, `kb/`, and `outline/`:
+In SpecNovelist, **this entire conversion process is 100% automated.** You never have to manually write `## RQ-xxx` entries, format markdown bullets, or look up unused IDs.
 
-```bash
-python scripts/specnovel.py placeholders
+---
+
+#### How the Automation Works Under the Hood
+
+When the automated placeholder engine runs (either via your AI assistant or via the CLI helper), it performs six automated steps across your project:
+
+```mermaid
+flowchart TD
+    A["Specs with Placeholders\nstory/synopsis.md, kb/, outline/\ne.g. 'summer 1892', 'Protagonist - Eldest Daughter'"] --> B["1. Pattern Discovery & Parsing\nScans brackets and angle tags while ignoring\nwiki-links, markdown links, and checkboxes"]
+    B --> C["2. Deduplication & Grouping\nMultiple occurrences of same placeholder\nare merged into a single research topic"]
+    C --> D["3. Entity & File Association\nDetects enclosing section IDs\n(e.g. attaches CHR-001 to Protagonist)"]
+    D --> E["4. Question & Priority Synthesis\nInfers question text based on entity type\n(demographics, period naming, geography, chemistry)"]
+    E --> F["5. Collision-Free ID Allocation\nAllocates permanent sequential IDs (RQ-001, RQ-002)\naccounting for full git history"]
+    F --> G["6. File Generation & Idempotence\nWrites structured entries to kb/research/questions.md\nFlags existing items as TRACKED to prevent duplicates"]
 ```
 
-Example output:
-```text
-# Placeholders detected in project specifications:
+1. **Pattern Discovery**: Scans all specifications (`story/synopsis.md`, `story/brief.md`, `kb/`, `outline/`) for bracketed functional placeholders (`[...]`), angle template tags (`<...>`), `TODO`/`TBD` lines, and bullet lists under placeholder headings. It automatically ignores Markdown links (`[text](url)`), task checkboxes (`- [ ]`), footnotes (`[^1]`), and wiki-links (`[[ID]]`).
+2. **Semantic Deduplication**: If `[Protagonist - Eldest Daughter]` appears across `story/synopsis.md` and `kb/characters/CHR-001.md`, the engine recognizes they refer to the same entity and creates a single consolidated research question rather than duplicating questions.
+3. **Contextual Entity Linking**: The engine detects which entity or scene the placeholder belongs to. If a placeholder appears inside `kb/characters/CHR-001.md`, the engine automatically populates `- **Needed for:** [[CHR-001]]`. If it appears in `story/synopsis.md`, it links `Needed for: story/synopsis.md`.
+4. **Intelligent Question Synthesis**: The engine analyzes the placeholder and surrounding context to synthesize the question:
+   - For characters (`CHR`): Prompts for authentic period naming, ethnicity, and generational demographics.
+   - For places (`PLC`): Prompts for period-accurate geography, sensory texture, and layout.
+   - For timeline dates: Prompts for historical chronology and seasonal context.
+   - Sets priority automatically (`high` for characters, places, plot points, and dates; `medium` for general texture).
+5. **Collision-Free ID Allocation**: Allocates next sequential IDs (`RQ-001`, `RQ-002`, ...) using `specnovel.py next-id`, checking both current files and deleted IDs across Git history to guarantee permanent uniqueness.
+6. **Idempotent File Generation**: Appends formatted entries directly into `kb/research/questions.md`. When run again later, existing items are recognized as `TRACKED by [[RQ-xxx]]` and will never be recreated.
 
-  [Protagonist - Eldest Daughter]
-    Locations: story/synopsis.md:57, kb/characters/CHR-001.md:1 (in [[CHR-001]])
-    Status:    UNTRACKED
+---
 
-  [Father - Disgraced Physician]
-    Locations: story/synopsis.md:57, kb/characters/CHR-002.md:1 (in [[CHR-002]])
-    Status:    UNTRACKED
+#### How to Trigger the Automation
 
-  [summer 1892]
-    Locations: story/synopsis.md:57
-    Status:    UNTRACKED
+You have two equivalent ways to run this automated conversion:
 
-  [Pittsburgh]
-    Locations: story/synopsis.md:57
-    Status:    UNTRACKED
+##### Option A: Hands-Free via AI Assistant (Recommended)
+When you invoke **`novel-init`** (from Step 3) or prompt your agent:
+> *"Convert all placeholders in my synopsis and knowledge base into research questions."*
 
-  Period poison: Need uncommon medical alkaloid available in 1892.
-    Locations: story/synopsis.md:69
-    Status:    UNTRACKED
+The agent automatically runs the conversion engine behind the scenes and reports the created `RQ` items. You do not need to open a terminal or edit any files.
 
-5 untracked placeholder(s) found out of 5 total.
-Run 'python scripts/specnovel.py placeholders --create-rq' to automatically generate research questions in kb/research/questions.md.
-```
-
-The engine automatically:
-- Scans bracketed descriptors (`[...]`), angle brackets (`<...>`), `TODO`/`TBD` markers, and list items under placeholder sections.
-- Deduplicates occurrences across files (e.g., identifying that `[Protagonist - Eldest Daughter]` in `story/synopsis.md` and `kb/characters/CHR-001.md` refers to the same underlying entity).
-- Associates placeholders with enclosing entity IDs (`[[CHR-001]]`).
-
-#### 2. Generate the Research Backlog Automatically
-Run `placeholders --create-rq`:
+##### Option B: Single CLI Command
+If you are editing markdown files directly in your editor, run the automated conversion with a single terminal command:
 
 ```bash
 python scripts/specnovel.py placeholders --create-rq
 ```
 
-Example output:
+Output:
 ```text
 Generated 5 research question(s) in kb/research/questions.md:
 
@@ -174,8 +175,17 @@ Updated kb/research/questions.md.
 Run 'python scripts/specnovel.py check' to verify catalog integrity.
 ```
 
-The engine writes complete, structured entries directly into `kb/research/questions.md`:
+---
 
+#### Before & After: What the Automation Generates
+
+**What you wrote** in `story/synopsis.md` and `kb/characters/CHR-001.md`:
+```markdown
+# CHR-001: [Protagonist - Eldest Daughter]
+In [summer 1892], in an industrial steel town near [Pittsburgh], [Protagonist - Eldest Daughter]...
+```
+
+**What the automation generates** in `kb/research/questions.md` without any manual input:
 ```markdown
 # Research Questions
 
@@ -198,20 +208,32 @@ The engine writes complete, structured entries directly into `kb/research/questi
 - **Notes:** Automatically generated from placeholder in story/synopsis.md:57
 ```
 
-#### 3. Idempotent & Non-Duplicating
-If you run `specnovel.py placeholders` again, it reports that all items are now `TRACKED by [[RQ-xxx]]`:
+---
 
+#### Inspecting Placeholders (Dry Run)
+
+To view what placeholders exist across your project before generating questions, run:
+
+```bash
+python scripts/specnovel.py placeholders
+```
+
+Example report:
 ```text
 # Placeholders detected in project specifications:
 
   [Protagonist - Eldest Daughter]
     Locations: story/synopsis.md:57, kb/characters/CHR-001.md:1 (in [[CHR-001]])
     Status:    TRACKED by [[RQ-001]]
-...
+
+  [summer 1892]
+    Locations: story/synopsis.md:57
+    Status:    TRACKED by [[RQ-003]]
+
 All 5 detected placeholder(s) are tracked by research questions.
 ```
 
-If you add a new placeholder later (e.g. `[River barge captain]` in a scene outline), running `specnovel.py placeholders --create-rq` will allocate only the new `RQ-006` without altering or duplicating existing questions!
+If you add a new placeholder later (e.g. `[River barge captain]` in a scene beat), running `specnovel.py placeholders` will immediately flag it as `UNTRACKED`, and `specnovel.py placeholders --create-rq` will allocate only `RQ-006` without touching existing questions!
 
 ---
 
