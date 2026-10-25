@@ -146,7 +146,7 @@ Using the formats in [kb-format.md](../novel-author/references/kb-format.md):
    priority first), open questions, and style anchors.
 4. On approval: `python scripts/specnovel.py accept --stage plan --model <active-model> -m "Initialize novel plan"` (establishes initial
    baselines for `brief`, `research`, `bible`, and `outline`, recording the `Novel-Model:` git trailer).
-5. Recommend the next step: `novel-research` for high-priority `RQ` items, then `novel-outline`.
+5. Conclude execution cleanly once the plan is initialized and validated. Do not prompt, ask, or suggest to the author to advance to subsequent pipeline stages (progression is strictly user-driven in the UI).
 
 > [!NOTE]
 > **Decoupled Brief Updates**: `novel-init` is exclusively used for Day 1 onboarding. When the author

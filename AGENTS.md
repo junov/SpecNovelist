@@ -152,6 +152,11 @@ by AI writing agents.
 
 ---
 
+17. **Manual Pipeline Progression & Stage Isolation**:
+    - Agents execute only the specific skill requested by the author.
+    - Once a skill completes its task, the agent must conclude its turn without chaining into subsequent pipeline stages, without invoking next-stage skills, and without prompting or asking the author whether they want to proceed or advance to the next stage.
+    - Pipeline and Journey Rail stage progression is strictly and manually controlled by the author in the UI.
+
 ## 3. Skill Dispatch Guide
 
 | Skill | Primary Role | When to Activate |
