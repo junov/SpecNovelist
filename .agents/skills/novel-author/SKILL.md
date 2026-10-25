@@ -55,10 +55,8 @@ help the author change it precisely. **The author owns the story: you propose, t
 3. Mechanical fixes (missing IDs via `next-id`, heading syntax, broken `[[ ]]` syntax) may be
    applied without asking, but must be reported.
 
-### D. Accept the story bible or plan
-When the author is satisfied with a batch of story bible changes:
-`specnovel.py check`, `specnovel.py index`, then
-`specnovel.py accept --stage bible -m "<summary>"` (or `--stage plan -m "<summary>"`).
+### D. Review and accept flow
+Leave all new and modified entries unstaged in Git. The author reviews, accepts, or reverts changes directly using the Accept/Revert buttons and Diff mode in the NovelStudio user interface. Do NOT run `specnovel accept` or `git commit`.
 
 ### E. Triage editorial feedback
 When the author provides direct feedback on draft scenes:
@@ -80,6 +78,7 @@ When adding specialized terminology, slang, archaic words, or invented world ter
 * Never edit `abridged/` or `manuscript/` here; never create `FCT`/`SRC` entries here.
 * Never renumber, reuse or "tidy" IDs. Deleted IDs stay retired.
 * Never edit `story/synopsis.md` or `story/style.md` without explicit approval.
+* Never run `specnovel accept` or `git commit`; Git commits occur solely in response to author interaction with Accept controls in the UI.
 * Keep one concept per entry and one name per concept; record aliases in the entry.
 * Store each piece of information once and reference it; do not copy facts into character or
   place entries (link `[[FCT-...]]` instead).
