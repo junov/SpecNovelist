@@ -2056,6 +2056,10 @@ def cmd_status(git: Git, args) -> int:
     impacts = {st: compute_impact(p, st) for st in LAYERS}
     gfx_impact = compute_graphics_impact(p)
     drift = {st: git.changed_since(git.baseline(st), *STAGE_DIRS.get(st, (st,))) for st in STAGES}
+    outline_base = git.baseline("outline")
+    outline_upstream = [d for d in git.changed_since(outline_base, "story", "kb") if d["file"] != "kb/INDEX.md"]
+    outline_direct = git.changed_since(outline_base, OUTLINE)
+    drift["outline"] = outline_upstream + outline_direct
     words = {st: sum(word_count(s.body) for s in p.layers[st].scenes.values()) for st in LAYERS}
     placeholders = scan_placeholders(p)
     untracked_pl = [pl for pl in placeholders if pl.tracked_by is None]
@@ -2072,6 +2076,7 @@ def cmd_status(git: Git, args) -> int:
                                                  **{st: len(p.layers[st].scenes) for st in LAYERS}},
                    "words": words, "pending": {st: len(impacts[st]["scenes"]) + len(impacts[st]["remove"]) for st in LAYERS},
                    "pending_items": pending_items,
+                   "upstream_drift": {"outline": outline_upstream},
                    "graphics": {"active": len(gfx_impact["active"]), "pending": gfx_impact["needs_update_count"],
                                 "inactive": len(gfx_impact["inactive"]), "pending_items": pending_items["graphics"]},
                    "placeholders": {"total": len(placeholders), "untracked": len(untracked_pl)},
