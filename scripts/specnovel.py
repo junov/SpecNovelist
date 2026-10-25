@@ -2060,13 +2060,20 @@ def cmd_status(git: Git, args) -> int:
     placeholders = scan_placeholders(p)
     untracked_pl = [pl for pl in placeholders if pl.tracked_by is None]
     if args.json:
+        pending_items = {
+            st: [s["id"] for s in impacts[st]["scenes"]] + list(impacts[st]["remove"])
+            for st in LAYERS
+        }
+        pending_items["graphics"] = [it["id"] for it in gfx_impact["active"] if it["status"] != "UP_TO_DATE"]
+        pending_items["research"] = [rq.id for rq in p.plan.of_type("RQ") if (rq.field_value("status") or "open").lower() == "open"]
         emit_json({"title": project_title(git),
                    "baselines": {st: git.commit_info(git.baseline(st)) for st in STAGES},
                    "catalog": counts, "scenes": {"outline": len(p.outline.scenes),
                                                  **{st: len(p.layers[st].scenes) for st in LAYERS}},
                    "words": words, "pending": {st: len(impacts[st]["scenes"]) + len(impacts[st]["remove"]) for st in LAYERS},
+                   "pending_items": pending_items,
                    "graphics": {"active": len(gfx_impact["active"]), "pending": gfx_impact["needs_update_count"],
-                                "inactive": len(gfx_impact["inactive"])},
+                                "inactive": len(gfx_impact["inactive"]), "pending_items": pending_items["graphics"]},
                    "placeholders": {"total": len(placeholders), "untracked": len(untracked_pl)},
                    "drift": drift, "errors": errors, "warnings": warnings, "infos": infos,
                    "next": next_step(p, impacts, gfx_impact, errors)})
