@@ -96,15 +96,34 @@
   - [[CHR-001]]: "<Essential line>"
 ```
 
-## 6. Directives (`directives/DIR-NNN.md`)
+## 7. Stage 7 — Abridged Novel (`abridged/CHP-NNN.md`)
+```markdown
+# CHP-001: <Chapter Title>
+
+## SCN-001: <Scene Title>
+<!-- Directives: [[DIR-001]] -->
+<Condensed chapter draft containing all sequenced beats ([[BET-001]], [[BET-002]]), causal turns, and essential dialogue, with lean descriptive texture.>
+```
+
+## 8. Stage 8 — Manuscript (`manuscript/<locale>/CHP-NNN.md`)
+```markdown
+# CHP-001: <Chapter Title>
+
+## SCN-001: <Scene Title>
+<!-- Directives: [[DIR-001]] -->
+<Polished literary prose rendered in the target locale according to setup/style.md and linked directives. Zero visible [[ID]] metadata.>
+```
+
+## 9. Stage 9 — Publishable Material (`publishable/`)
+- `publishable/graphics/ILL-NNN.png` (and localized `ILL-NNN.<locale>.png` when `Has Text: true`)
+- `publishable/<locale>/manuscript.{md,epub,pdf,docx}` compiled via `uv run python scripts/specnovel.py compile`
+
+## 10. Cross-Stage Directives (`directives/DIR-NNN.md`)
 ```markdown
 # DIR-001: <Directive Title>
-
-- **ID:** DIR-001
-- **Status:** active
-- **Locale:** all
+- **Stage:** all
 - **Scope:** [[CHR-001]], [[ARC-001]]
-
-## Instruction
-<Single-source-of-truth instruction applied across all linked records during generation and synchronization.>
+- **Locale:** all
+- **Status:** active
+- **Instruction:** <Single-source-of-truth instruction applied across all linked records during generation and synchronization.>
 ```

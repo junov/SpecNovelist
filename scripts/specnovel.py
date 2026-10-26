@@ -151,12 +151,12 @@ WORLD_FOLDERS = (
 )
 
 TYPES: "OrderedDict[str, str]" = OrderedDict([
-    # Stage 1: Setup
+    # Stage 2: Setup
     ("THM", "theme"),
     ("STY", "style rule"),
-    # Stage 2: Research Questions
+    # Stage 3: Research Questions
     ("RQ", "research question"),
-    # Stage 3: World
+    # Stage 4: World
     ("FCT", "fact"),
     ("SRC", "source"),
     ("CHR", "character"),
@@ -166,11 +166,11 @@ TYPES: "OrderedDict[str, str]" = OrderedDict([
     ("WLD", "world rule"),
     ("TML", "timeline event"),
     ("GLS", "glossary entry"),
-    # Stage 4: Narrative Structure
+    # Stage 5: Narrative Structure
     ("ARC", "story arc"),
     ("BET", "narrative beat"),
     ("ILL", "illustration"),
-    # Stage 5: Physical Structure
+    # Stage 6: Physical Structure
     ("VOL", "volume"),
     ("ACT", "act"),
     ("PRT", "part"),
@@ -660,6 +660,43 @@ def ancestors(model: Model, sid: str) -> List[Section]:
     return out
 
 
+def _toposort_intra_scene_nodes(nodes: List[str], model: Model) -> List[str]:
+    """Topologically order beats & illustrations within a single scene when separate fields are used."""
+    if len(nodes) <= 1:
+        return list(nodes)
+    node_set = set(nodes)
+    deps_map: Dict[str, Set[str]] = {}
+    for nid in nodes:
+        sec = model.defs.get(nid)
+        deps_map[nid] = (sec.prereq_ids() & node_set) - {nid} if sec else set()
+
+    if not any(deps_map.values()):
+        return list(nodes)
+
+    ordered: List[str] = []
+    remaining = list(nodes)
+    while remaining:
+        progressed = False
+        for nid in list(remaining):
+            if not (deps_map[nid] - set(ordered)):
+                ordered.append(nid)
+                remaining.remove(nid)
+                progressed = True
+                break
+        if not progressed:
+            # Cycle within scene; preserve remaining order so DAG cycle checker reports it
+            ordered.extend(remaining)
+            break
+    return ordered
+
+
+NON_SEQUENCE_SCENE_FIELD_RE = re.compile(
+    r"^\s*[-*]\s*\**(?:prerequisites?|prereqs?|dependencies|dependency|depends[-_\s]*on|"
+    r"pays[-_\s]*off|payoff|plants?|setups?|reveals?|learns?|hidden[-_\s]*from|summary|notes?|goal|conflict|outcome)\**\s*:",
+    re.I,
+)
+
+
 def outline_of(model: Model) -> Outline:
     o = Outline()
     for sid, s in model.defs.items():
@@ -700,13 +737,34 @@ def outline_of(model: Model) -> Outline:
                 o.scenes.append(sid)
                 o.chapter_of[sid] = chp_id
                 o.by_chapter.setdefault(chp_id, []).append(sid)
-                # Extract ordered sequence of beats and illustrations
-                seq = s.ordered_ref_ids_for_field("sequence", "beats_and_illustrations", "elements")
+                # 1. Explicit unified Sequence field preserves exact interleaved order
+                seq = s.ordered_ref_ids_for_field("sequence", "beats_and_illustrations", "elements", "nodes", "order")
                 if not seq:
-                    # Combine ordered refs from Beats/Illustrations fields or body in appearance order
-                    for rid, _ in s.refs:
-                        if rid.startswith(("BET-", "ILL-")) and rid not in seq:
-                            seq.append(rid)
+                    # 2. Separate Beats and Illustrations fields: combine and respect intra-scene DAG dependencies
+                    explicit_beats = [
+                        r for r in s.ordered_ref_ids_for_field("beats", "beat")
+                        if r.startswith(("BET-", "ILL-"))
+                    ]
+                    explicit_ills = [
+                        r for r in s.ordered_ref_ids_for_field("illustrations", "illustration", "graphics", "gfx")
+                        if r.startswith(("BET-", "ILL-"))
+                    ]
+                    if explicit_beats or explicit_ills:
+                        raw_combined: List[str] = []
+                        for r in explicit_beats + explicit_ills:
+                            if r not in raw_combined:
+                                raw_combined.append(r)
+                        seq = _toposort_intra_scene_nodes(raw_combined, model)
+                if not seq:
+                    # 3. Fallback: scan scene lines that are not prerequisites/summary/epistemic metadata
+                    for _, line_text, fenced in s.raw:
+                        if fenced or NON_SEQUENCE_SCENE_FIELD_RE.match(line_text):
+                            continue
+                        for m in REF_RE.finditer(COMMENT_RE.sub("", line_text)):
+                            rid = m.group("id")
+                            if rid.startswith(("BET-", "ILL-")) and rid not in seq:
+                                seq.append(rid)
+                    seq = _toposort_intra_scene_nodes(seq, model)
                 o.scene_sequence[sid] = seq
                 o.scene_beats[sid] = [r for r in seq if r.startswith("BET-")]
                 o.scene_illustrations[sid] = [r for r in seq if r.startswith("ILL-")]
@@ -715,9 +773,18 @@ def outline_of(model: Model) -> Outline:
 
     # Compute global beat & illustration positions in reading order: (1-based scene index, 1-based sequence index in scene, scene ID)
     for scn_idx, sid in enumerate(o.scenes, 1):
+        scn_sec = model.defs.get(sid)
+        is_reprise_scn = bool(scn_sec and (scn_sec.field_value("reprise", "flashback") or "").lower() in ("true", "yes", "1"))
         for seq_idx, nid in enumerate(o.scene_sequence.get(sid, []), 1):
             if nid not in o.node_positions:
                 o.node_positions[nid] = (scn_idx, seq_idx, sid)
+            elif nid.startswith("BET-") and not is_reprise_scn:
+                prev_scn = o.node_positions[nid][2]
+                if prev_scn != sid:
+                    o.problems.append(
+                        f"duplicate beat scheduling: beat {nid} is scheduled in multiple scenes ({prev_scn} and {sid}); "
+                        f"each beat in {NARRATIVE}/ should be scheduled in a single scene in {STRUCTURE}/ ({scn_sec.location if scn_sec else sid})"
+                    )
             if nid.startswith("BET-") and nid not in o.beat_positions:
                 o.beat_positions[nid] = (scn_idx, seq_idx, sid)
 
@@ -1371,6 +1438,7 @@ def auto_link_directives_in_project(
             continue
         candidate_sections.append(sec)
 
+    seen_files_ids: Set[Tuple[str, str]] = set()
     for layer_name, d in p.layers.items():
         if stage_filter and stage_filter not in ("all", layer_name):
             continue
@@ -1379,7 +1447,20 @@ def auto_link_directives_in_project(
                 continue
             if only_ids is not None and sid not in only_ids:
                 continue
-            candidate_sections.append(sec)
+            if (sec.file, sid) not in seen_files_ids:
+                seen_files_ids.add((sec.file, sid))
+                candidate_sections.append(sec)
+
+    if not stage_filter or stage_filter in ("all", "manuscript"):
+        for loc, d in p.manuscript_locales.items():
+            for sid, sec in d.scenes.items():
+                if record_id and sid != record_id:
+                    continue
+                if only_ids is not None and sid not in only_ids:
+                    continue
+                if (sec.file, sid) not in seen_files_ids:
+                    seen_files_ids.add((sec.file, sid))
+                    candidate_sections.append(sec)
 
     for sec in candidate_sections:
         relevant_dirs = match_directives_for_section(sec, p)
@@ -1434,19 +1515,36 @@ def check_preserved_directives(p: Project) -> List[str]:
         base = git.baseline(st)
         if not base:
             continue
-        old_d = derived_of(build_model(git.commit_md(base, STAGE_DIRS[st][0])))
-        cur_d = p.layers[st]
-        for sid, old_sec in old_d.scenes.items():
-            if sid not in cur_d.scenes:
-                continue
-            new_sec = cur_d.scenes[sid]
-            old_dirs = old_sec.directive_ids() & active_dirs
-            new_dirs = new_sec.directive_ids()
-            dropped = sorted(old_dirs - new_dirs)
-            for d_id in dropped:
-                errors.append(
-                    f"directive preservation violation: scene {sid} in stage '{st}' dropped associated directive [[{d_id}]] ({new_sec.location})"
-                )
+        if st == "abridged":
+            old_d = derived_of(build_model(git.commit_md(base, ABRIDGED)))
+            cur_layers = [("abridged", old_d, p.layers["abridged"])]
+        else:
+            cur_layers = []
+            seen_ms = set()
+            for loc, cur_d in p.manuscript_locales.items():
+                if cur_d.scenes:
+                    loc_dir = f"{MANUSCRIPT}/{loc}"
+                    old_md = git.commit_md(base, loc_dir)
+                    if not old_md:
+                        old_md = git.commit_md(base, MANUSCRIPT)
+                    cur_layers.append((f"manuscript ({loc})", derived_of(build_model(old_md)), cur_d))
+                    seen_ms.add(id(cur_d))
+            if id(p.layers["manuscript"]) not in seen_ms and p.layers["manuscript"].scenes:
+                old_d = derived_of(build_model(git.commit_md(base, MANUSCRIPT)))
+                cur_layers.append(("manuscript", old_d, p.layers["manuscript"]))
+
+        for label, old_d, cur_d in cur_layers:
+            for sid, old_sec in old_d.scenes.items():
+                if sid not in cur_d.scenes:
+                    continue
+                new_sec = cur_d.scenes[sid]
+                old_dirs = old_sec.directive_ids() & active_dirs
+                new_dirs = new_sec.directive_ids()
+                dropped = sorted(old_dirs - new_dirs)
+                for d_id in dropped:
+                    errors.append(
+                        f"directive preservation violation: scene {sid} in stage '{label}' dropped associated directive [[{d_id}]] ({new_sec.location})"
+                    )
 
     return errors
 
@@ -2047,7 +2145,7 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             if expected_stage and actual_top != expected_stage:
                 errors.append(f"{s.id} ({TYPES[s.prefix]}) must be stored in '{expected_stage}/' but was found in '{s.file}' ({s.location})")
 
-    # 3. Stage 2 & 3 (Research & World) integrity
+    # 3. Stage 3 & 4 (Research & World) integrity
     for s in plan.of_type("FCT"):
         if not any(r.startswith("SRC-") for r in s.ref_ids()):
             errors.append(f"fact {s.id} does not cite any [[SRC-...]] source ({s.location})")
@@ -2063,8 +2161,13 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
         if not s.has_field("basis"):
             warnings.append(f"world rule {s.id} has no 'Basis:' line (cite [[FCT-...]] or state 'invented') ({s.location})")
     open_rq = [s for s in plan.of_type("RQ") if re.search(FIELD_RE.format(name="status") + r"\s*\**\s*open", s.text, re.I | re.M)]
+    open_rq_ids = {s.id for s in open_rq}
     if open_rq:
         infos.append(f"{len(open_rq)} open research question(s): " + ", ".join(s.id for s in open_rq))
+        for sec in list(plan.of_type("BET")) + list(plan.of_type("SCN")):
+            hit_rqs = sorted(sec.ref_ids() & open_rq_ids)
+            for rq_id in hit_rqs:
+                warnings.append(f"unresolved research dependency: {sec.id} references open research question [[{rq_id}]] ({sec.location})")
 
     # 4. Directives (DIR-NNN) validation & preservation check
     valid_dir_stages = set(STAGES) | {"all", "global"}
@@ -2092,8 +2195,21 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
 
     errors += check_preserved_directives(p)
 
-    # 5. Stage 4 (Illustrations) & Stage 8 (Publishable Graphics) verification
+    # 5. Stage 5 (Narrative) & Stage 9 (Publishable Graphics) verification + Craft Pitfall Guardrails
     dag = build_story_dag(p)
+    if nar.beats:
+        referenced_arcs: Set[str] = set()
+        for b_arcs in nar.beat_arcs.values():
+            referenced_arcs |= b_arcs
+        for i_arcs in nar.ill_arcs.values():
+            referenced_arcs |= i_arcs
+        for arc_id in nar.arcs:
+            if arc_id not in referenced_arcs:
+                arc_sec = plan.defs.get(arc_id)
+                warnings.append(
+                    f"empty story arc: {arc_id} ({arc_sec.title if arc_sec else arc_id}) has no beats or illustrations associated with it in {NARRATIVE}/"
+                )
+
     for s in plan.of_type("ILL"):
         desc = (s.field_value("description", "summary") or "\n".join(s.body)).strip()
         if not desc:
@@ -2101,6 +2217,41 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
         itype = (s.field_value("type") or "").strip().lower()
         if not itype:
             warnings.append(f"illustration {s.id} has no 'Type:' field (e.g. map, diagram, cover, scene) ({s.location})")
+        if o.scenes and not is_cover_or_matter_illustration(s) and s.id not in o.node_positions:
+            warnings.append(
+                f"unscheduled illustration: narrative illustration {s.id} ({s.title}) is defined in {NARRATIVE}/ but not placed in any scene in {STRUCTURE}/"
+            )
+
+    if o.scenes and nar.beats:
+        for sid in o.scenes:
+            scn_sec = plan.defs.get(sid)
+            if not o.scene_sequence.get(sid):
+                warnings.append(
+                    f"empty scene: {sid} ({scn_sec.title if scn_sec else sid}) in {STRUCTURE}/ sequences no beats ([[BET-...]]) or illustrations ([[ILL-...]])"
+                )
+            elif scn_sec:
+                scn_places = scn_sec.ref_ids_for_field("where", "place", "setting", "location")
+                beat_places_union: Set[str] = set()
+                for bid in o.scene_beats.get(sid, []):
+                    beat_places_union |= nar.beat_places.get(bid, set())
+                if scn_places and beat_places_union and not (scn_places & beat_places_union):
+                    warnings.append(
+                        f"setting mismatch in scene {sid}: scene Place ({', '.join(sorted(scn_places))}) does not match any of its sequenced beats' Places ({', '.join(sorted(beat_places_union))})"
+                    )
+
+        # Check for unused world entities (CHR, PLC, ORG, OBJ)
+        all_external_refs: Set[str] = set()
+        for sec in plan.sections():
+            for rid, _ in sec.refs:
+                if rid != sec.id:
+                    all_external_refs.add(rid)
+        unused_world = [
+            s.id for pre in ("CHR", "PLC", "ORG", "OBJ")
+            for s in plan.of_type(pre)
+            if s.id not in all_external_refs
+        ]
+        if unused_world:
+            infos.append(f"unused world entities (not yet referenced in any beat or scene): {', '.join(unused_world)}")
 
     img_ref_pattern = re.compile(r"""(?:!\[.*?\]\((?P<url1>[^)\s]+)\)|(?P<url2>(?:publishable/graphics/|graphics/)?[a-zA-Z0-9_\-\./]+\.(?:png|svg|jpg|jpeg|webp)))""", re.I)
     ill_filename_pattern = re.compile(r"""(?:^|.*/)(?P<id>(?:ILL|GFX)-\d{3,})(?:\.(?P<locale>[a-zA-Z0-9_-]+))?\.(?P<ext>png|svg|jpg|jpeg|webp)$""", re.I)
@@ -2132,7 +2283,7 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
                         if file_loc != loc:
                             errors.append(f"manuscript '{rel}:{line_no}' (locale: {loc}) references mismatched illustration '{url}'; expected localized version '{expected_loc_path}'")
 
-    # 6. Beat DAG, Physical Structure reading order, and Epistemic/Chekhov checks
+    # 6. Narrative DAG, Physical Structure reading order, and Epistemic/Chekhov checks
     dag_errors, dag_warnings, dag_infos = run_dag_checks(p)
     errors += dag_errors
     warnings += dag_warnings
@@ -2143,8 +2294,18 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
     warnings += ep_warnings
     infos += ep_infos
 
-    # 7. Stage 6 (Abridged) & Stage 7 (Manuscript) consistency with Stage 5 (Physical Structure)
-    for name, d in p.layers.items():
+    # 7. Stage 7 (Abridged) & Stage 8 (Manuscript) consistency with Stage 6 (Physical Structure)
+    layers_to_check: List[Tuple[str, str, Derived]] = [("abridged", "abridged", p.layers["abridged"])]
+    checked_ms_ids: Set[int] = set()
+    for loc, loc_d in p.manuscript_locales.items():
+        if loc_d.scenes or loc == p.config.primary_language:
+            label = "manuscript" if len(p.config.target_languages) <= 1 or loc == p.config.primary_language else f"manuscript ({loc})"
+            layers_to_check.append((label, "manuscript", loc_d))
+            checked_ms_ids.add(id(loc_d))
+    if id(p.layers["manuscript"]) not in checked_ms_ids:
+        layers_to_check.append(("manuscript", "manuscript", p.layers["manuscript"]))
+
+    for name, base_stage, d in layers_to_check:
         errors += [f"{name}: duplicate {x['id']}: {x['first']} and {x['second']}" for x in d.model.duplicates]
         for sid, s in d.scenes.items():
             if sid not in o.chapter_of:
@@ -2164,18 +2325,18 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             for rid, line in s.refs:
                 if rid not in plan.defs:
                     errors.append(f"{name}: dangling reference [[{rid}]] at {s.file}:{line}")
-            if name == "manuscript":
+            if base_stage == "manuscript":
                 clean_body = COMMENT_RE.sub("", "\n".join(s.body))
                 if REF_RE.search(clean_body):
-                    warnings.append(f"manuscript: visible [[ID]] markup left in prose of {sid} ({s.location})")
+                    warnings.append(f"{name}: visible [[ID]] markup left in prose of {sid} ({s.location})")
                 for bm in BRACKET_PLACEHOLDER_RE.finditer(clean_body):
                     inner = bm.group(1).strip()
                     if inner.lower() not in {"x", " "} and not inner.isdigit():
-                        warnings.append(f"manuscript: unresolved placeholder '[{inner}]' left in prose of {sid} ({s.location})")
+                        warnings.append(f"{name}: unresolved placeholder '[{inner}]' left in prose of {sid} ({s.location})")
         missing = [sid for sid in o.scenes if sid not in d.scenes]
         if missing:
             msg = f"{name}: {len(missing)} of {len(o.scenes)} structure scene(s) not written yet"
-            if name in require:
+            if base_stage in require and name in ("abridged", "manuscript"):
                 errors.append(msg + ": " + ", ".join(missing))
             elif d.scenes:
                 infos.append(msg)
@@ -2530,7 +2691,7 @@ def cmd_init(root: Path, args) -> int:
             p.mkdir(parents=True)
             (p / ".gitkeep").write_text("", encoding="utf-8")
             print(f"created  {d}/")
-        elif not any(p.iterdir()):
+        elif not any(f.name not in ("template.md", ".gitkeep") for f in p.iterdir()):
             (p / ".gitkeep").write_text("", encoding="utf-8")
 
     gi = git.root / ".gitignore"
@@ -2629,12 +2790,18 @@ def cmd_status(git: Git, args) -> int:
     return 0
 
 
-def next_step(p: Project, impacts: dict, pub_impact: dict, errors: List[str]) -> str:
+def next_step(p: Project, impacts: dict, pub_impact: dict, errors: List[str], drift: Optional[dict] = None) -> str:
     if errors:
         return "fix the errors reported by 'check'"
     for st in STAGES:
         if not p.git.baseline(st):
             return f"novel-generate: generate stage '{st}' and run 'accept --stage {st}'"
+        if st in SPEC_STAGES and drift and drift.get(st):
+            return f"accept or sync: stage '{st}' has uncommitted edits — run 'accept --stage {st}'"
+        if st in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+            st_imp = compute_impact(p, st, allow_uninitialized=True)
+            if st_imp.get("records") or st_imp.get("unhandledUpstream"):
+                return f"novel-sync: synchronize stage '{st}' with upstream changes"
     if impacts["abridged"]["scenes"] or impacts["abridged"]["remove"]:
         return "novel-sync: synchronize stage 'abridged'"
     if impacts["manuscript"]["scenes"] or impacts["manuscript"]["remove"]:
@@ -2654,7 +2821,7 @@ def cmd_check(git: Git, args) -> int:
         print(f"CHECK FAILED - {len(errors)} error(s):")
         print("\n".join(f"  - {e}" for e in errors))
     else:
-        print("CHECK OK - All 8 stages, Beat DAG, physical serialization, and directives are valid.")
+        print("CHECK OK - All 9 stages, Narrative DAG, physical serialization, and directives are valid.")
     if warnings:
         print(f"Warnings ({len(warnings)}):")
         print("\n".join(f"  - {w}" for w in warnings))
@@ -2742,12 +2909,23 @@ def allocate_next_ids(git: Git, prefix: str, count: int = 1) -> List[str]:
     prefix = prefix.upper()
     if not re.fullmatch(r"[A-Z][A-Z0-9]*", prefix):
         raise NovelError("Prefix must be uppercase letters/digits, e.g. CHR, BET, SCN, DIR")
-    rx = re.compile(rf"^[+\- ]?#{{1,6}}\s+{prefix}-(\d+)\b")
+    rx = re.compile(rf"^#{{1,6}}\s+{prefix}-(\d+)\b")
     lines: List[str] = []
-    for text in git.working_md(*ALL_DIRS).values():
+    for rel, text in git.working_md(*ALL_DIRS).items():
+        if rel.endswith("/template.md"):
+            continue
         lines += COMMENT_RE.sub("", text).splitlines()
     if git.has_commits():
-        lines += (git.run("log", "--all", "--format=", "-p") or "").splitlines()
+        raw_patch = git.run("log", "--all", "--format=", "-p", f"-S{prefix}-") or ""
+        cleaned_patch_lines = []
+        for pl in raw_patch.splitlines():
+            if pl.startswith(("+++", "---", "diff ", "index ", "@@")):
+                continue
+            if pl and pl[0] in ("+", "-", " "):
+                cleaned_patch_lines.append(pl[1:])
+            else:
+                cleaned_patch_lines.append(pl)
+        lines += COMMENT_RE.sub("", "\n".join(cleaned_patch_lines)).splitlines()
     nums = [int(m.group(1)) for m in map(rx.match, lines) if m]
     start = (max(nums) if nums else 0) + 1
     return [f"{prefix}-{n:03d}" for n in range(start, start + count)]
@@ -3848,13 +4026,34 @@ def cmd_harvest(git: Git, args) -> int:
                 place_links.append(f"[[{pid}|{pname}]]")
                 created_files.append(f"{WORLD}/places/{pid}.md")
 
-        primary_place = place_links[0] if place_links else (f"[[{p.plan.of_type('PLC')[0].id}]]" if p.plan.of_type("PLC") else "[[PLC-001]]")
-        primary_arc = f"[[{p.narrative.arcs[0]}]]" if p.narrative.arcs else "[[ARC-001]]"
+        if place_links:
+            primary_place = place_links[0]
+        elif p.plan.of_type("PLC"):
+            primary_place = f"[[{p.plan.of_type('PLC')[0].id}]]"
+        else:
+            pid = allocate_next_ids(git, "PLC", 1)[0]
+            ppath = git.root / f"{WORLD}/places/{pid}.md"
+            ppath.parent.mkdir(parents=True, exist_ok=True)
+            ppath.write_text(f"# {pid}: Primary Setting\n- **Category:** Setting\n- **Status:** Provisional\n", encoding="utf-8")
+            primary_place = f"[[{pid}|Primary Setting]]"
+            created_files.append(f"{WORLD}/places/{pid}.md")
+
+        if p.narrative.arcs:
+            primary_arc = f"[[{p.narrative.arcs[0]}]]"
+        else:
+            aid = allocate_next_ids(git, "ARC", 1)[0]
+            arcs_file = git.root / ARCS_FILE
+            arcs_file.parent.mkdir(parents=True, exist_ok=True)
+            existing_arcs = arcs_file.read_text(encoding="utf-8") if arcs_file.is_file() else "# Story Arcs\n"
+            arcs_file.write_text(existing_arcs.rstrip() + f"\n\n## {aid}: Primary Story Arc\n- **Type:** main-plot\n", encoding="utf-8")
+            primary_arc = f"[[{aid}]]"
+            created_files.append(ARCS_FILE)
 
         stitle = getattr(args, "title", None) or harvest_data["candidate_title"]
         bid = allocate_next_ids(git, "BET", 1)[0]
         prev_beat = p.narrative.beats[-1] if p.narrative.beats else None
         dep_str = f"[[{prev_beat}]]" if prev_beat else "None"
+        denouement_line = "- **Denouement:** true\n" if not p.narrative.denouement_beats else ""
 
         beats_file = git.root / BEATS_FILE
         beats_file.parent.mkdir(parents=True, exist_ok=True)
@@ -3864,6 +4063,7 @@ def cmd_harvest(git: Git, args) -> int:
             f"- **Time:** provisional\n"
             f"- **Arcs:** {primary_arc}\n"
             f"- **Dependencies:** {dep_str}\n"
+            f"{denouement_line}"
             f"- **Characters:** {', '.join(char_links) or 'provisional'}\n"
             f"- **Summary:** {' '.join(harvest_data['beats'][:2])}\n"
         )
@@ -4698,10 +4898,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
     sub = ap.add_subparsers(dest="command")
     specs = [
-        ("init", "scaffold 8-stage directory structure and directives/ from templates"),
-        ("status", "dashboard across all 8 stages and directives"),
-        ("check", "integrity checks across all 8 stages, Beat DAG, serialization, and directives"),
-        ("dag", "verify Stage 4 Beat DAG and Stage 5 physical structure serialization"),
+        ("init", "scaffold 9-stage directory structure and directives/ from templates"),
+        ("status", "dashboard across all 9 stages and directives"),
+        ("check", "integrity checks across all 9 stages, Narrative DAG, serialization, and directives"),
+        ("dag", "verify Stage 5 Narrative DAG and Stage 6 physical structure serialization"),
         ("next-id", "allocate the next unused ID for a prefix"),
         ("trace", "where an ID is defined, referenced, used in beats, and scheduled in scenes"),
         ("delta", "upstream changes since a stage's baseline (requires stage generation)"),
@@ -4710,7 +4910,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ("directives", "manage cross-stage directives (list, match, link, factor)"),
         ("feedback", "alias for directives command"),
         ("placeholders", "scan and convert placeholders into research questions (RQ) in research/"),
-        ("bibliography", "auto-generate bibliography from facts attached to the Beat DAG"),
+        ("bibliography", "auto-generate bibliography from facts attached to the Narrative DAG"),
         ("models", "list AI models contributing to the project and check acknowledgements"),
         ("index", "regenerate world/INDEX.md (catalog of all IDs)"),
         ("stats", "word counts per chapter/scene vs targets"),

@@ -1,7 +1,7 @@
 # Writing, Illustration & Publication Style Guide
 
 <!--
-STAGE 1: SETUP (setup/style.md).
+STAGE 2: SETUP (setup/style.md).
 BINDING INPUT. This file thoroughly describes how the final novel must read, how illustrations are
 specified and rendered, and how the book is typeset for publication.
 -->

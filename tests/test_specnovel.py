@@ -653,6 +653,93 @@ In [summer 1892], in an industrial town near [Pittsburgh], [Protagonist - Eldest
         self.assertIn("# Developmental Editorial & Style Analysis Report", rep_txt)
         self.assertIn("[[SCN-001]]", rep_txt)
 
+    def test_intra_scene_toposort_and_summary_ref_isolation(self):
+        # ILL-001 depends on BET-001
+        self.write(
+            "narrative/illustrations.md",
+            "# Narrative Illustrations\n\n"
+            "## ILL-001: Harbour Map\n"
+            "- **Type:** map\n"
+            "- **Arcs:** [[ARC-001]]\n"
+            "- **Dependencies:** [[BET-001]]\n"
+            "- **Description:** Map of Southampton pier.\n",
+        )
+        # In SCN-001, list - **Illustrations:** [[ILL-001]] ABOVE - **Beats:** [[BET-001]],
+        # and in SCN-002 mention [[BET-001]] in - **Summary:**
+        self.write(
+            "structure/outline.md",
+            "# Physical Structure\n\n"
+            "## ACT-001: Act I\n\n"
+            "### CHP-001: Chapter One\n"
+            "- **POV:** [[CHR-001]]\n\n"
+            "#### SCN-001: Morning at the Pier\n"
+            "- **POV:** [[CHR-001]]\n"
+            "- **Where:** [[PLC-001]]\n"
+            "- **When:** 1912-04-10 morning\n"
+            "- **Cast:** [[CHR-001]]\n"
+            "- **Illustrations:** [[ILL-001]]\n"
+            "- **Beats:** [[BET-001]]\n"
+            "- **Target words:** 500\n\n"
+            "#### SCN-002: Noon Boarding\n"
+            "- **POV:** [[CHR-001]]\n"
+            "- **Where:** [[PLC-001]]\n"
+            "- **When:** 1912-04-10 noon\n"
+            "- **Cast:** [[CHR-001]], [[CHR-002]]\n"
+            "- **Beats:** [[BET-002]], [[BET-003]]\n"
+            "- **Summary:** Follows directly from [[BET-001]] at the pier.\n"
+            "- **Target words:** 500\n",
+        )
+        code, data = self.json_cli("check")
+        self.assertEqual(code, 0, data)
+        self.assertTrue(data["ok"])
+
+    def test_duplicate_beat_scheduling_and_pitfall_guardrails(self):
+        # Add an empty story arc ARC-002 and a second place PLC-002
+        arcs_txt = (self.root / "narrative/arcs.md").read_text(encoding="utf-8")
+        self.write(
+            "narrative/arcs.md",
+            arcs_txt + "\n## ARC-002: Forgotten Subplot\n- **Type:** subplot\n",
+        )
+        self.write(
+            "world/places/PLC-002.md",
+            "# PLC-002: Distant Lighthouse\n- **Category:** landmark\n",
+        )
+        self.write(
+            "narrative/illustrations.md",
+            "# Narrative Illustrations\n\n"
+            "## ILL-001: Unscheduled Scene Sketch\n"
+            "- **Type:** scene\n"
+            "- **Arcs:** [[ARC-001]]\n"
+            "- **Dependencies:** [[BET-001]]\n"
+            "- **Description:** Sketch of the pier.\n",
+        )
+        # Schedule BET-001 in BOTH SCN-001 and SCN-002, and set SCN-001 Where to PLC-002 (mismatching BET-001's PLC-001)
+        self.write(
+            "structure/outline.md",
+            "# Physical Structure\n\n"
+            "## ACT-001: Act I\n\n"
+            "### CHP-001: Chapter One\n"
+            "- **POV:** [[CHR-001]]\n\n"
+            "#### SCN-001: Morning at the Pier\n"
+            "- **POV:** [[CHR-001]]\n"
+            "- **Where:** [[PLC-002]]\n"
+            "- **When:** 1912-04-10 morning\n"
+            "- **Cast:** [[CHR-001]]\n"
+            "- **Sequence:** [[BET-001]]\n\n"
+            "#### SCN-002: Noon Boarding\n"
+            "- **POV:** [[CHR-001]]\n"
+            "- **Where:** [[PLC-001]]\n"
+            "- **When:** 1912-04-10 noon\n"
+            "- **Cast:** [[CHR-001]], [[CHR-002]]\n"
+            "- **Sequence:** [[BET-001]], [[BET-002]], [[BET-003]]\n",
+        )
+        code, data = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("duplicate beat scheduling: beat BET-001" in e for e in data["errors"]), data["errors"])
+        self.assertTrue(any("empty story arc: ARC-002" in w for w in data["warnings"]), data["warnings"])
+        self.assertTrue(any("unscheduled illustration: narrative illustration ILL-001" in w for w in data["warnings"]), data["warnings"])
+        self.assertTrue(any("setting mismatch in scene SCN-001" in w for w in data["warnings"]), data["warnings"])
+
 
 if __name__ == "__main__":
     unittest.main()

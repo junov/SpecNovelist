@@ -1,9 +1,9 @@
 # Themes & Motifs
 
 <!--
-STAGE 1: SETUP (setup/themes.md).
+STAGE 2: SETUP (setup/themes.md).
 Catalog core thematic questions and motifs using permanent IDs (THM-NNN).
-Allocate new IDs via `python scripts/specnovel.py next-id THM`.
+Allocate new IDs via `uv run python scripts/specnovel.py next-id THM`.
 
 Example:
 ## THM-001: Duty Versus Self-Determination

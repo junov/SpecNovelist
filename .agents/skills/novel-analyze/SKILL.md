@@ -2,7 +2,7 @@
 name: novel-analyze
 description: >-
   Generates in-depth developmental editorial and style analysis reports focused on metrics across the
-  8-stage SpecNovelist pipeline. Differentiates between raw quality indicators (Beat DAG violations,
+  9-stage SpecNovelist pipeline. Differentiates between raw quality indicators (Narrative DAG violations,
   pacing sags, Chekhov gun gaps, passive phrasing, clichés, epistemic leaks) and style-reflective metrics
   (sentence rhythm, cadence entropy, dialogue ratio, sensory palettes, visual illustration intensity).
   Evaluates alignment with setup/style.md and active directives (directives/DIR-NNN.md), audits
@@ -23,7 +23,7 @@ description: >-
 ## Core Philosophy: Raw Quality vs. Style-Reflective Metrics
 
 1. **Raw Quality Indicators**:
-   - Universal narrative and technical integrity criteria: Beat DAG cycles or dead ends (`narrative/beats.md`), topological serialization errors (`structure/outline.md`), epistemic leaks, unresolved Chekhov plants, pacing sags, clichés, and passive voice hotspots.
+   - Universal narrative and technical integrity criteria: Narrative DAG cycles or dead ends (`narrative/beats.md`, `narrative/illustrations.md`), topological serialization errors (`structure/outline.md`), epistemic leaks, unresolved Chekhov plants, pacing sags, clichés, and passive voice hotspots.
 2. **Style-Reflective Metrics**:
    - Technical values reflecting conscious artistic choices declared in `setup/style.md` and `directives/DIR-NNN.md`: sentence length, cadence entropy ($H_{cad}$), dialogue ratio, sensory palette distribution, and illustration intensity (`ILL-NNN`).
    - Evaluated against **fidelity to `setup/style.md`** and **cross-chapter consistency throughout the novel**.
@@ -32,9 +32,9 @@ description: >-
 
 ## Multi-Level Zoom-In Protocol
 
-The analysis report zooms in systematically across all 8 project stages:
+The analysis report zooms in systematically across all 9 project stages:
 1. **Narrative Structure (`narrative/` — `ARC-NNN`, `BET-NNN`, `ILL-NNN`)**:
-   - Evaluates Beat DAG momentum, arc density, turning point distribution, and Chekhov gun setup/payoff distance gaps.
+   - Evaluates Narrative DAG momentum, story arc density, turning point distribution, and Chekhov gun setup/payoff distance gaps.
 2. **Physical Structure & Chapter Level (`structure/outline.md` — `VOL`, `ACT`, `CHP-NNN`)**:
    - Audits cross-chapter style variance ($\sigma_{sent}^2$, $H_{cad}$ shifts, dialogue ratio shifts).
 3. **Scene Level (`SCN-NNN`)**:

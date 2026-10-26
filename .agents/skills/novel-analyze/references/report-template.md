@@ -19,9 +19,9 @@ Use this schema when compiling or refining developmental editorial reports. Alwa
 | Metric | Dimension / Type | Observed Value | Standard / Style Target | Assessment |
 |---|---|---|---|---|
 | Total Word Count | Scope (Raw) | X wds | Y wds | On Budget / Review |
-| Dialogue Ratio | Style-Reflective | X% | 25% – 45% (per style.md) | Calibrated / Investigate |
+| Dialogue Ratio | Style-Reflective | X% | 25% – 45% (per `setup/style.md`) | Calibrated / Investigate |
 | Cadence Entropy ($H_{cad}$) | Style-Reflective | X.X bits | ≥ 2.2 bits | Dynamic / Monotone |
-| Avg Sentence Length | Style-Reflective | X.X words | per `story/style.md` | Calibrated |
+| Avg Sentence Length | Style-Reflective | X.X words | per `setup/style.md` | Calibrated |
 | Chekhov Guns Tracked | Dramatic (Raw) | X setups | 0 orphan setups | Healthy / Dormant |
 | Pacing Sag Sequences | Dramatic (Raw) | X sequence(s) | 0 sags | Clean / Review Sags |
 | Clichés / Dead Metaphors | Literary (Raw) | X detected | 0 clichés | Clean / Polish |
@@ -33,10 +33,10 @@ Use this schema when compiling or refining developmental editorial reports. Alwa
 
 Raw quality indicators measure objective storytelling integrity, narrative coherence, and technical craft faults that detract from immersion regardless of chosen style.
 
-### 2.1 Story Causality & Epistemic Secrets
+### 2.1 Narrative Causality & Epistemic Secrets
 | Secret Element | Revelation Scene | Learned By | Kept Hidden From | Integrity |
 |---|---|---|---|---|
-| [[PLT-xxx]] | [[SCN-xxx]] | [[CHR-xxx]] | [[CHR-yyy]] | Preserved / Leaked |
+| [[FCT-xxx]] / [[ARC-xxx]] | [[SCN-xxx]] | [[CHR-xxx]] | [[CHR-yyy]] | Preserved / Leaked |
 
 ### 2.2 Chekhov's Gun Setups & Payoffs
 | Planted Entity | Setup Scene | Payoff Scene | Scene Gap | Diagnostic Assessment |
@@ -46,7 +46,7 @@ Raw quality indicators measure objective storytelling integrity, narrative coher
 ### 2.3 Pacing Sags & Momentum Stalls
 > [!WARNING]
 > **Pacing Sag Detected in:** [[SCN-xxx]], [[SCN-yyy]]  
-> Consecutive scenes exceeding target words without major plot movement.
+> Consecutive scenes exceeding target words without major beat or story arc movement.
 
 ### 2.4 Cliché & Passive Phrasing Hotspots
 | Scene | Location | Flagged Cliché / Passive Phrase | Suggested Somatic Alternative |
@@ -55,14 +55,14 @@ Raw quality indicators measure objective storytelling integrity, narrative coher
 
 ---
 
-## 3. Style-Reflective Metrics vs. `story/style.md` Compliance
+## 3. Style-Reflective Metrics vs. `setup/style.md` Compliance
 
-### 3.1 Sentence Rhythm & Prose Cadence (`style.md` §3)
+### 3.1 Sentence Rhythm & Prose Cadence (`setup/style.md` §3)
 - **Observed Sentence Length:** X.X words per sentence.
 - **Cadence Entropy ($H_{cad}$):** X.X bits.
-- **Style Alignment:** Comparison against declared voice in `story/style.md`.
+- **Style Alignment:** Comparison against declared voice in `setup/style.md`.
 
-### 3.2 Sensory Palette Grounding (`style.md` §6)
+### 3.2 Sensory Palette Grounding (`setup/style.md` §6)
 | Sensory Modality | Occurrences | Percentage | Grounding Role |
 |---|---|---|---|
 | Visual | X | X% | Primary anchor |
@@ -71,8 +71,8 @@ Raw quality indicators measure objective storytelling integrity, narrative coher
 | Olfactory | X | X% | Atmosphere / mood |
 | Gustatory | X | X% | Flavor / texture |
 
-### 3.3 Visual Graphics Intensity (`style.md` ## Graphics Guidelines)
-- **Cataloged Graphics References in Outline:** N assets ([[GFX-xxx]]).
+### 3.3 Visual Illustration Intensity (`setup/style.md` ## Graphics Guidelines)
+- **Cataloged Illustrations in Outline:** N assets ([[ILL-xxx]]).
 - **Trigger Compliance:** Verification against spatial transitions, tactical diagrams, and cover art.
 
 ---
@@ -102,7 +102,7 @@ Raw quality indicators measure objective storytelling integrity, narrative coher
 ## 6. Actionable Editorial Roadmap
 
 1. **High Priority (Quality & Logic)**:
-   - Specific structural, epistemic, and pacing fixes.
+   - Specific Narrative DAG, epistemic, and pacing fixes.
 2. **Medium Priority (Style & Sensory Polish)**:
    - Specific sensory enhancements and cliché replacements.
 3. **Consistency & Rhythm**:

@@ -56,22 +56,24 @@ This identifies:
 ### Step 3: Incrementally Update Target Stage Records
 Update **only** the affected records in `<stage>`:
 
-- **Synchronizing `research` (Stage 2) from `setup`**:
+- **Synchronizing `setup` (Stage 2) from `initial`**:
+  - Update `setup/brief.md`, `setup/themes.md` (`THM-NNN`), and `setup/style.md` (`# Locale: <locale>`) to reflect changes in `initial/synopsis.md` or `initial/config.md`.
+- **Synchronizing `research` (Stage 3) from `initial` / `setup`**:
   - Run `uv run python scripts/specnovel.py placeholders --create-rq` and add/update `RQ-NNN` items in `research/questions.md` for new themes or brief changes.
-- **Synchronizing `world` (Stage 3) from `setup` / `research`**:
+- **Synchronizing `world` (Stage 4) from `initial` / `setup` / `research`**:
   - Answer newly added `RQ-NNN` questions with sourced `FCT-NNN` + `SRC-NNN` records, and update affected `CHR`, `PLC`, `ORG`, `OBJ`, `WLD`, `TML`, or `GLS` files while preserving `[[DIR-NNN]]` links.
-- **Synchronizing `narrative` (Stage 4) from `setup` / `world`**:
+- **Synchronizing `narrative` (Stage 5) from `initial` / `setup` / `world`**:
   - Update affected story arcs (`ARC-NNN`), narrative beats (`BET-NNN`), and textual illustration specs (`ILL-NNN`).
-  - Ensure every new or updated beat has `Place:`, `Time:`, `Arcs:`, and valid `Dependencies:` in the Beat DAG rooted at `Denouement: true`.
+  - Ensure every new or updated beat has `Place:`, `Time:`, `Arcs:`, and valid `Dependencies:` in the Narrative DAG rooted at `Denouement: true`, and every non-cover/non-matter illustration has `Arcs:` and valid `Dependencies:`.
   - Run `uv run python scripts/specnovel.py dag`.
-- **Synchronizing `structure` (Stage 5) from `narrative`**:
+- **Synchronizing `structure` (Stage 6) from `narrative`**:
   - Update `structure/outline.md` (`VOL`, `ACT`, `CHP`, `SCN`) so newly added or re-ordered beats (`BET-NNN`) and illustrations (`ILL-NNN`) are serialized in valid topological order.
   - Run `uv run python scripts/specnovel.py dag`.
-- **Synchronizing `abridged` (Stage 6) from `setup` / `world` / `narrative` / `structure` / `directives`**:
+- **Synchronizing `abridged` (Stage 7) from `setup` / `world` / `narrative` / `structure` / `directives`**:
   - Re-synthesize only the impacted `SCN-NNN` sections inside `abridged/CHP-NNN.md`, honoring all linked `[[DIR-NNN]]` directives.
-- **Synchronizing `manuscript` (Stage 7) from `abridged` / `setup` / `world` / `directives`**:
+- **Synchronizing `manuscript` (Stage 8) from `abridged` / `setup` / `world` / `directives`**:
   - Re-render only the impacted scenes in `manuscript/<locale>/CHP-NNN.md` across all configured locales, honoring `setup/style.md` and all active `DIR-NNN` directives.
-- **Synchronizing `publishable` (Stage 8) from `narrative` / `structure` / `manuscript` / `directives`**:
+- **Synchronizing `publishable` (Stage 9) from `narrative` / `structure` / `manuscript` / `directives`**:
   - Re-render only impacted active illustrations in `publishable/graphics/ILL-NNN[.<locale>].png` and recompile deliverables in `publishable/<locale>/` via `uv run python scripts/specnovel.py compile`.
 
 ### Step 4: Auto-Link Directives, Validate, and Advance Stage Baseline
@@ -87,4 +89,4 @@ Update **only** the affected records in `<stage>`:
    ```bash
    uv run python scripts/specnovel.py accept --stage <stage> --model "<AI Model Name>" -m "Synchronize <stage> with upstream changes"
    ```
-   *(When syncing rendered illustrations in `publishable`, include `--gfx ILL-NNN` to record per-asset sync baselines.)*
+   *(When syncing rendered illustrations in `publishable`, include `--asset ILL-NNN` to record per-asset sync baselines.)*
