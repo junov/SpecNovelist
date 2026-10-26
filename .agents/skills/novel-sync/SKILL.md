@@ -1,206 +1,90 @@
 ---
 name: novel-sync
-description: >-
-  The incremental compilation and synchronization engine that translates changes in the plan
-  (story/, kb/, outline/) into the derived layers (abridged/ and manuscript/). Use when the user has
-  edited story specifications, updated knowledge base items, changed research facts, or altered the
-  outline, and wants to update the novel drafts. Computes the impact delta against the git
-  baselines, orchestrates abridged and manuscript updates, validates structural integrity and word
-  count budgets, and commits synchronized baselines with structured Novel-Sync git trailers.
+description: Category 2 (Synchronization) skill for SpecNovelist. Incrementally updates data for any of the 8 project stages (setup, research, world, narrative, structure, abridged, manuscript, publishable) based on edits made to earlier stages. Enforces the Synchronization Generation Gate (cannot run until initial generation has been performed at least once for the target stage), respects and preserves existing [[DIR-NNN]] directives on updated records, automatically links relevant pre-existing directives to newly created records, and uses directives as a DRY factoring single source of truth.
 ---
 
-# Novel-Sync
+# `novel-sync` — Incremental Stage Synchronization Engine
 
-`novel-sync` is the core execution engine of the SpecNovelist **Spec-as-Source** methodology.
-
-In SpecNovelist:
-- **`story/`**, **`kb/`**, and **`outline/`** represent the **specification (Source of Truth)**.
-- **`abridged/`** and **`manuscript/`** represent the **derived artifacts (Generated/Compiled Text)**.
-
-When you modify a character's secret, relocate a scene, revise a historical fact, or adjust the
-outline, `novel-sync` calculates the exact impact radius, reconciles `abridged/`, renders
-`manuscript/`, verifies continuity and integrity, and advances the project baselines.
-
-* **Detailed synchronization protocol**: [sync-protocol.md](references/sync-protocol.md)
-* **Helper script**: `python <toolkit>/scripts/specnovel.py <command>`
+This skill implements **Category 2: Synchronization** across the 8-stage SpecNovelist pipeline. When upstream stages (`setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `manuscript`) are edited, `novel-sync` computes the exact impact delta and incrementally updates the target stage while enforcing directive preservation, automatic directive linking on new records, and DRY directive factoring.
 
 ---
 
-## The Parallel Synchronization Baselines
+## 1. Core Synchronization Invariants
 
-SpecNovelist operates with **seven decoupled, parallel sync stages**, each tracked via Git commit trailers (`Novel-Sync: <stage>`):
-
-1. **`brief`**: Inception & premise decisions (`story/synopsis.md`, `story/brief.md`).
-2. **`research`**: Empirical grounding (`kb/research/`, `kb/sources/`, `kb/facts/`).
-3. **`bible`**: Story bible canon (`kb/characters/`, `kb/places/`, `kb/plot/`, `kb/world/`, `kb/timeline/`, etc.).
-4. **`outline`**: Structural skeleton in reading order (`outline/outline.md`).
-5. **`graphics`**: Graphical asset renderings (`graphics/`, from `kb/graphics/`).
-6. **`abridged`**: Condensed intermediate novel (`abridged/`).
-7. **`manuscript`**: Polished literary prose (`manuscript/`, `story/style.md`, `story/editorial/`).
-
-Whenever the author updates `story/synopsis.md` or `story/brief.md` during the novel's lifecycle (decoupled from `novel-init`), `specnovel.py delta --stage brief` isolates the exact changes, allowing `novel-sync` to propagate changes cleanly downstream through `research`, `bible`, `outline`, `graphics`, and the drafts.
-
----
-
-## The Synchronization Lifecycle
-
-```mermaid
-flowchart TD
-    A["Author edits story/, kb/, or outline/"] --> B["1. Compute Impact (specnovel.py impact)"]
-    B --> C{"Check Problems?"}
-    C -- "Errors in Plan" --> D["Fix errors (novel-author / outline)"]
-    C -- "Clean Delta" --> E["2. Update Abridged Draft (abridged/)"]
-    E --> F["3. Author Review: Abridged Layer"]
-    F -- "Approved" --> G["4. Advance Abridged Baseline (specnovel.py accept --stage abridged)"]
-    G --> H["5. Render Manuscript (manuscript/)"]
-    H --> I["6. Run Integrity Check (specnovel.py check)"]
-    I -- "Fails" --> J["Fix prose or references"]
-    J --> I
-    I -- "Passes" --> K["7. Author Review: Manuscript Layer"]
-    K -- "Approved" --> L["8. Advance Manuscript Baseline (specnovel.py accept --stage manuscript)"]
-    L --> M["Git Commit with Novel-Sync trailers"]
-```
+1. **The Synchronization Generation Gate**:
+   - Synchronization **cannot** be performed on a stage until initial generation (`novel-generate`) has been performed and committed (`accept --stage <stage>`) at least once for that stage.
+   - Running `uv run python scripts/specnovel.py delta --stage <stage>` or `uv run python scripts/specnovel.py impact --stage <stage>` on an ungenerated stage will fail with a Generation Gate error. If a stage has no baseline yet, hand off to `novel-generate` first.
+2. **Directive Preservation on Updated Records**:
+   - Every record in any stage may carry references to `[[DIR-NNN]]` directives in `directives/`.
+   - When updating an existing record during synchronization, you **must**:
+     1. Read every active `DIR-NNN` referenced by that record (or by its upstream entities).
+     2. Apply the directive's instructions when regenerating or revising the record's content.
+     3. **Preserve all existing `[[DIR-NNN]]` links** on the record (`uv run python scripts/specnovel.py check` verifies that no `[[DIR-NNN]]` links were dropped against the stage's baseline commit).
+3. **Automatic Directive Linking on Newly Created Records**:
+   - Whenever synchronization creates a new record (e.g., a new beat `BET-NNN`, scene `SCN-NNN`, world entity, or chapter draft), it must automatically link pre-existing `DIR-NNN` directives whose `Scope:` matches the new record or its referenced entities (`CHR`, `PLC`, `ARC`, `CHP`, etc.):
+     ```bash
+     uv run python scripts/specnovel.py directives link --apply
+     ```
+   - `specnovel.py accept --stage <stage>` also runs automatic directive linking on newly added records before committing.
+4. **Automatic Directive Factoring (Single Source of Truth)**:
+   - When an upstream change introduces a special instruction, rule, or stylistic constraint that needs to be applied across multiple downstream records during synchronization, factor it into a single `DIR-NNN` in `directives/` rather than duplicating prose instructions across records:
+     ```bash
+     uv run python scripts/specnovel.py directives factor --title "<Title>" --scope "<Scope>" --instruction "<Instruction>" --targets <ID1> <ID2> ...
+     ```
 
 ---
 
-## Workflow Steps
+## 2. Incremental Synchronization Workflow
 
-### 1. Inspect Delta and Impact
-Always start by checking pending changes and impact against the last sync baselines:
+### Step 1: Inspect Project Status & Verify Generation Gate
+Run status and delta checks for the target stage:
 ```bash
-python scripts/specnovel.py status
-python scripts/specnovel.py impact --stage graphics
-python scripts/specnovel.py impact --stage abridged
-python scripts/specnovel.py impact --stage manuscript
+uv run python scripts/specnovel.py status
+uv run python scripts/specnovel.py delta --stage <stage>
 ```
-- `specnovel.py impact --stage graphics` evaluates all `GFX` definitions in `kb/graphics/`.
-  - **Token optimization**: Only graphics entities referenced by the Story DAG (active in scenes or prerequisites) are rendered. Inactive assets are skipped to conserve AI tokens.
-  - **Per-asset tracking**: Baselines are tracked per asset (`Novel-GFX-Sync: GFX-NNN`). When an asset is newly re-referenced in the DAG, the engine immediately reports how far out of sync it is (`X commits behind`) and which upstream dependencies changed.
-- `specnovel.py impact` automatically flags scenes with pending upstream spec edits as well as
-  scenes with active, open editorial directives (`EDT`) in `story/editorial/`.
-- If duplicate IDs, dangling references, or unnested scenes exist, resolve them before proceeding.
-- If code drift exists in `abridged/` or `manuscript/` from manual edits outside a sync, review those
-  changes so intentional modifications are incorporated or preserved.
+- If `delta --stage <stage>` reports that `<stage>` has not been generated yet (`Novel-Sync: <stage>` baseline is `None`), stop and invoke `novel-generate` for `<stage>`.
 
-### 2. Formulate the Synchronization Plan
-Present a clear, step-by-step plan to the author:
-1. **Upstream changes**: List what changed in `story/`, `kb/`, or `outline/`.
-2. **Graphics assets to (re)render in `graphics/`**: Active assets needing generation or updates.
-3. **Impacted scenes in `abridged/`**: Which scenes must be newly created, re-abridged, or deleted.
-4. **Impacted scenes in `manuscript/`**: Which scenes must be newly rendered or updated.
-5. **Global notes**: Any cross-cutting changes (e.g. style guide revisions) that require global attention.
-
-### 3. Synchronize Graphical Assets (`graphics/`)
-For each asset flagged under `impact --stage graphics`:
-- Generate or render the image/diagram asset specified in `kb/graphics/GFX-xxx.md`.
-- Place rendered file in `graphics/` (e.g. `graphics/GFX-001.png` or target path).
-- Advance the graphics baseline:
-  ```bash
-  python scripts/specnovel.py accept --stage graphics -m "Render graphical assets"
-  # Or accept a specific asset:
-  python scripts/specnovel.py accept --stage graphics --asset GFX-001 -m "Render harbor map"
-  ```
-- This records a `Novel-GFX-Sync: GFX-xxx` Git trailer for active assets.
-
-### 4. Synchronize the Abridged Layer (`abridged/`)
-For each scene flagged under `impact --stage abridged`:
-- Use the `novel-abridge` skill conventions.
-- Update or draft the scene under `abridged/CHP-xxx.md`.
-- Embed active rendered graphics from `graphics/` (`![Caption](../graphics/map.png)`).
-- Ensure all plot beats and key dialogue from the revised outline are present.
-- If an outline scene was removed, prune it from `abridged/`.
-
-### 5. Author Review Gate: Abridged Layer
-Present a concise summary of the abridged changes to the author:
-- Highlight the updated plot turns, character actions, and dialogue.
-- Ask for confirmation to proceed.
-- If the author provides feedback requiring changes to plot or character motivation, hand off to
-  `novel-author` or `novel-outline` to adjust the spec first.
-- If approved, commit the abridged baseline:
-  ```bash
-  python scripts/specnovel.py accept --stage abridged -m "Sync abridged: <summary>"
-  ```
-
-### 6. Synchronize the Manuscript Layer (`manuscript/`)
-For each scene flagged under `impact --stage manuscript`:
-- Use the `novel-write` skill conventions.
-- Consult `story/config.md` for configured `languages.targets`.
-- For each target locale (e.g. `en-US`, `fr-FR`):
-  - Read the updated abridged scene, `story/style.md` (including `# Locale: <locale>` sections), and referenced `kb/` entries.
-  - Ingest active editorial directives targeting this scene and locale (`specnovel.py feedback SCN-xxx --locale <locale>`).
-  - Embed active rendered graphics from `graphics/`, using localized assets (`graphics/GFX-NNN.<locale>.png`) if text labels exist, or base assets (`graphics/GFX-NNN.png`) as fallback.
-  - Render literary prose under `manuscript/<locale>/CHP-xxx.md` (or flat `manuscript/` for single-language legacy projects).
-- Match target word count budgets (`specnovel.py stats`).
-- If an outline scene was removed, prune it from all manuscript subdirectories.
-
-### 7. Automated Validation and Integrity Check
-Run:
+### Step 2: Compute Downstream Impact
+For stages with fine-grained dependency tracking (`narrative`, `structure`, `abridged`, `manuscript`, `publishable`):
 ```bash
-python scripts/specnovel.py dag
-python scripts/specnovel.py check
-python scripts/specnovel.py stats
+uv run python scripts/specnovel.py impact --stage <stage>
 ```
-Verify that:
-- Story Causality DAG is acyclic, reading order coherence is preserved (all prerequisites precede their dependents), and every element has a path to the root denouement.
-- Project configuration (`story/config.md`) validates against schema and foreword paths resolve.
-- Every scene in the outline exists in both `abridged/` and `manuscript/` (for all configured locales) in the correct reading order.
-- All active graphics referenced by the Story DAG exist on disk under `graphics/`, and localized graphic references in manuscript files point to matching locale versions or valid base fallbacks.
-- No dangling references or orphan scenes exist.
-- No raw `[[ID]]` tags appear in the visible manuscript prose.
-- Fact citations and source records remain valid.
+This identifies:
+- Modified upstream files since the target stage's last `Novel-Sync: <stage>` commit.
+- Specific scenes (`SCN-NNN`), chapters (`CHP-NNN`), or illustrations (`ILL-NNN`) impacted by changes to `setup/`, `research/`, `world/`, `narrative/`, `structure/`, or `directives/`.
 
-### 8. Author Review Gate: Manuscript Layer
-Present the rendered manuscript scenes, word count pacing, and diffs to the author.
-Ask the author to review and approve the text.
-- If the author requests minor prose refinements, edit `manuscript/` to polish voice and rhythm.
-- If the author requests changes to plot, character actions, or factual events, guide the author
-  to adjust the spec first, then re-sync.
+### Step 3: Incrementally Update Target Stage Records
+Update **only** the affected records in `<stage>`:
 
-### 9. Accept the Synchronization
-Once the author approves and all integrity checks pass:
-- If this synchronization resolved open editorial directives (`EDT`), update their `Status:` to `applied`
-  and record the commit baseline in `Resolution:`.
-- Ensure the active AI model is declared with `--model <model-name>` (or via `SPECNOVEL_MODEL` env var).
-  `specnovel.py accept` automatically checks that any contributing AI model is disclosed in `story/acknowledgements.md`
-  before allowing the commit.
-- Commit the baseline:
-```bash
-python scripts/specnovel.py accept --stage manuscript --model gemini-2.5-pro -m "Sync manuscript: <summary>"
-```
-Or, if synchronizing all stages simultaneously:
-```bash
-python scripts/specnovel.py accept --stage all --model gemini-2.5-pro -m "Sync full novel: <summary>"
-```
-This stages `story/`, `kb/`, `outline/`, `graphics/`, `abridged/`, `manuscript/` and records a Git commit with
-structured `Novel-Sync:`, `Novel-GFX-Sync:`, and `Novel-Model:` trailers.
-```git
-novel-sync(abridged, manuscript): Update collision aftermath
+- **Synchronizing `research` (Stage 2) from `setup`**:
+  - Run `uv run python scripts/specnovel.py placeholders --create-rq` and add/update `RQ-NNN` items in `research/questions.md` for new themes or brief changes.
+- **Synchronizing `world` (Stage 3) from `setup` / `research`**:
+  - Answer newly added `RQ-NNN` questions with sourced `FCT-NNN` + `SRC-NNN` records, and update affected `CHR`, `PLC`, `ORG`, `OBJ`, `WLD`, `TML`, or `GLS` files while preserving `[[DIR-NNN]]` links.
+- **Synchronizing `narrative` (Stage 4) from `setup` / `world`**:
+  - Update affected story arcs (`ARC-NNN`), narrative beats (`BET-NNN`), and textual illustration specs (`ILL-NNN`).
+  - Ensure every new or updated beat has `Place:`, `Time:`, `Arcs:`, and valid `Dependencies:` in the Beat DAG rooted at `Denouement: true`.
+  - Run `uv run python scripts/specnovel.py dag`.
+- **Synchronizing `structure` (Stage 5) from `narrative`**:
+  - Update `structure/outline.md` (`VOL`, `ACT`, `CHP`, `SCN`) so newly added or re-ordered beats (`BET-NNN`) and illustrations (`ILL-NNN`) are serialized in valid topological order.
+  - Run `uv run python scripts/specnovel.py dag`.
+- **Synchronizing `abridged` (Stage 6) from `setup` / `world` / `narrative` / `structure` / `directives`**:
+  - Re-synthesize only the impacted `SCN-NNN` sections inside `abridged/CHP-NNN.md`, honoring all linked `[[DIR-NNN]]` directives.
+- **Synchronizing `manuscript` (Stage 7) from `abridged` / `setup` / `world` / `directives`**:
+  - Re-render only the impacted scenes in `manuscript/<locale>/CHP-NNN.md` across all configured locales, honoring `setup/style.md` and all active `DIR-NNN` directives.
+- **Synchronizing `publishable` (Stage 8) from `narrative` / `structure` / `manuscript` / `directives`**:
+  - Re-render only impacted active illustrations in `publishable/graphics/ILL-NNN[.<locale>].png` and recompile deliverables in `publishable/<locale>/` via `uv run python scripts/specnovel.py compile`.
 
-Novel-Sync: abridged, manuscript
-Novel-Model: gemini-2.5-pro
-Novel-Modified: SCN-014, CHR-003
-Novel-Abridged-Updated: SCN-014
-Novel-Manuscript-Updated: SCN-014
-```
-This commit becomes the new baseline for future deltas.
-
-### 10. Compile Deliverables (Optional)
-When publishing drafts or deliverable books:
-```bash
-python scripts/specnovel.py compile --format epub --locale en-US
-python scripts/specnovel.py bibliography --format md
-```
-`compile` automatically incorporates the foreword (if enabled), candidate glossary entries (`GLS`), DAG-filtered bibliographies, and `story/acknowledgements.md` **verbatim** into `build/`.
-
----
-
-## Rules
-
-1. **Spec is Primary**: Never edit `abridged/` or `manuscript/` to alter plot events, character
-   fates, or historical facts without updating `story/`, `kb/`, or `outline/` first.
-2. **Sequential Compilation**: Always update and review `abridged/` before rendering `manuscript/`.
-   Never skip the abridged layer.
-3. **No Phantom Scenes**: Only scenes defined in `outline/` may exist in `abridged/` and `manuscript/`.
-4. **Git Baseline Integrity**: Use `specnovel.py accept` to commit baselines so that future changes
-   are accurately tracked and diffed.
-5. **Mandatory AI Model Attribution**: Every contributing AI model must be declared using `--model <name>` (or via environment/git config), and must be mentioned in `story/acknowledgements.md`. `specnovel.py accept` strictly blocks synchronization commits if any model is unacknowledged.
+### Step 4: Auto-Link Directives, Validate, and Advance Stage Baseline
+1. Auto-link pre-existing directives to any newly created records:
+   ```bash
+   uv run python scripts/specnovel.py directives link --apply
+   ```
+2. Run full project integrity and directive-preservation checks:
+   ```bash
+   uv run python scripts/specnovel.py check
+   ```
+3. Commit and advance the stage's synchronization baseline:
+   ```bash
+   uv run python scripts/specnovel.py accept --stage <stage> --model "<AI Model Name>" -m "Synchronize <stage> with upstream changes"
+   ```
+   *(When syncing rendered illustrations in `publishable`, include `--gfx ILL-NNN` to record per-asset sync baselines.)*

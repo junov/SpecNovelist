@@ -1,217 +1,78 @@
 ---
 name: novel-verify
 description: >-
-  Audits continuity, fact fidelity, and style compliance across the novel project, detects manual
-  drift in derived drafts, and triages reader/author bug reports against the specification. Use when
-  the user asks to verify story consistency, check whether scenes match researched facts, audit
-  manuscript prose against the style guide, triage a continuity defect, or diagnose drift between
-  outline/, abridged/, and manuscript/.
+  Audits continuity, fact fidelity, Beat DAG causality, topological physical serialization, directive
+  preservation, and style compliance across the 8-stage SpecNovelist project (setup/, research/, world/,
+  narrative/, structure/, abridged/, manuscript/, publishable/, and directives/). Detects manual drift
+  in derived drafts and triages defects to the authoritative stage.
 ---
 
-# Novel-Verify
+# `novel-verify` — 8-Stage Continuity, Causality & Quality Assurance
 
-`novel-verify` is the diagnostic and quality-assurance engine of the SpecNovelist methodology.
-It audits alignment between the specifications (`story/`, `kb/`, `outline/`) and the derived
-narrative drafts (`abridged/` and `manuscript/`).
+`novel-verify` is the diagnostic and quality-assurance engine of the SpecNovelist methodology. It audits alignment across all 8 project stages (`setup/`, `research/`, `world/`, `narrative/`, `structure/`, `abridged/`, `manuscript/`, `publishable/`) and the cross-stage `directives/` repository.
 
 * **Verification checklists**: [audit-checklists.md](references/audit-checklists.md)
-* **Helper**: `python <toolkit>/scripts/specnovel.py <command>`
+* **Helper**: `uv run python scripts/specnovel.py <command>`
 
 ---
 
-## Capabilities & Audits
-
-```mermaid
-flowchart TD
-    subgraph Audits
-        A["1. Structural & Traceability\n(specnovel.py check)"]
-        B["2. Continuity Audit\n(Character, Timeline, Knowledge)"]
-        C["3. Fact & Source Audit\n(Historical / Scientific Fidelity)"]
-        D["4. Style Compliance Audit\n(style.md Anti-patterns & Voice)"]
-        E["5. Drift Detection\n(specnovel.py status)"]
-    end
-    subgraph Triage
-        F["Defect / Bug Report"] --> G{"Where is the flaw?"}
-        G -->|Spec error| H["Plan Defect: Fix in KB / outline"]
-        G -->|Missed beat| I["Abridged Defect: Fix in abridged/"]
-        G -->|Prose error| J["Manuscript Defect: Fix in manuscript/"]
-    end
-```
-
----
-
-## 1. Structural, Traceability, and Causality Audit
+## 1. Structural, Traceability, Beat DAG & Directive Audit
 Run the automated integrity suite:
 ```bash
-python scripts/specnovel.py check
-python scripts/specnovel.py dag
+uv run python scripts/specnovel.py check
+uv run python scripts/specnovel.py dag
 ```
 Verifies:
-- **Story Causality & Reading Order Coherence**:
-  - **Acyclicity**: Causality graph is a strict DAG with zero cycles.
-  - **Reading Order**: Every element in the outline is preceded by all its prerequisites.
-  - **Denouement Essentiality**: Every element in the story has a directed causal path to the novel's final denouement root (no dead-ends or inessential scenes).
-- **Integrity & References**:
-  - `story/config.md` conforms strictly to the schema (author identity, target languages, foreword path if enabled, compilation flags).
-  - `story/acknowledgements.md` exists, is non-empty, and discloses all contributing AI models.
-  - All cataloged IDs are unique across the project (including `GLS` glossary entries).
+- **Stage 4 Narrative Beat DAG (`narrative/`)**:
+  - Every beat (`BET-NNN` in `narrative/beats.md`) has a valid `Place: [[PLC-NNN]]`, `Time:`, and at least one story arc `Arcs: [[ARC-NNN]]`.
+  - **Acyclicity**: Beat dependencies (`Dependencies: [[BET-NNN]]`) form a strict DAG with zero cycles.
+  - **Denouement Root**: The Beat DAG has a root marked `Denouement: true`, and every beat has a directed causal path leading to the denouement (no dead-end beats).
+- **Stage 5 Physical Structure Serialization (`structure/outline.md`)**:
+  - Every beat `BET-B` that depends on `BET-A` in Stage 4 appears *after* `BET-A` in the physical reading order of scenes (`SCN-NNN`) in `structure/outline.md`.
+- **Directives Integrity (`directives/DIR-NNN.md`)**:
+  - Every `DIR-NNN` has valid `Status:`, `Locale:`, and `Scope:` metadata.
+  - **Directive Preservation**: No updated record in any stage has dropped a `[[DIR-NNN]]` link that was present in its baseline commit.
+- **Stage 1–3 & 6–8 Integrity**:
+  - `setup/config.md` conforms strictly to the schema (author identity, target locales with `[primary]`, foreword path if enabled, compilation flags).
+  - `structure/back-matter/acknowledgements.md` exists, is non-empty, and discloses all contributing AI models (`uv run python scripts/specnovel.py models`).
+  - All cataloged IDs are unique (`THM`, `RQ`, `FCT`, `SRC`, `CHR`, `PLC`, `ORG`, `OBJ`, `WLD`, `TML`, `GLS`, `ARC`, `BET`, `ILL`, `VOL`, `ACT`, `CHP`, `SCN`, `DIR`).
   - No dangling wiki-links (`[[ID]]`) exist.
-  - All plot elements (`PLT`) carry valid Time and Place metadata for transition clarity.
-  - All editorial directives (`EDT`) carry valid Target, Stage, Status, and Locale metadata (`Locale: all` or in configured targets).
-  - All researched facts (`FCT`) cite valid source records (`SRC`).
-  - Every source has an accessible URL or full bibliographic citation.
-  - Derived chapters and scenes in `abridged/` and `manuscript/<locale>/` match the outline in order and hierarchy.
-  - Localized graphics references in manuscript files match the chapter's locale (`GFX-NNN.<locale>.png`) or fallback cleanly to base assets without text.
-  - No visible `[[ID]]` markup leaks into final manuscript prose.
+  - All researched facts (`FCT` in `world/facts/`) cite valid source records (`SRC` in `world/sources/`).
+  - Derived chapters and scenes in `abridged/` and `manuscript/<locale>/` match `structure/outline.md` in order and hierarchy.
+  - Localized illustration assets in `publishable/graphics/` (`ILL-NNN.<locale>.png`) match manuscript links or fall back cleanly to `ILL-NNN.png`.
+  - No raw `[[ID]]` markup leaks into final `manuscript/` prose.
 
-To audit contributing AI models and verify their mandatory disclosure:
+To inspect the traceability and usage matrix for any entity across all 8 stages:
 ```bash
-python scripts/specnovel.py models
-```
-Verifies that all models recorded in Git history (`Novel-Model:` trailers) or configuration are acknowledged in `story/acknowledgements.md`.
-
-To inspect the traceability and usage matrix for any character, place, or fact:
-```bash
-python scripts/specnovel.py trace CHR-001
-python scripts/specnovel.py trace FCT-030
-```
-Shows where the item is defined, what other items reference it, and every scene in reading order
-where it appears.
-
----
-
-## 2. Continuity Audit
-
-Continuity errors break reader immersion. Run targeted continuity audits across scenes:
-
-### A. Character Continuity
-- **Physical Traits**: Check character hair, eye color, height, scars, handedness, and injuries
-  against the `Continuity` section of their `CHR` entry. Ensure wounds take realistic time to heal.
-- **Forms of Address & Aliases**: Verify that characters use period-appropriate forms of address
-  matching their social relationship in `CHR`.
-
-### B. Timeline & Chronology Audit
-- **Calendar & Travel**: Check scene dates (`When:`) against `kb/timeline/timeline.md`.
-  Verify that travel times between locations (`PLC`) are physically possible given the era's
-  technology (steam trains, horses, walking, ocean liners).
-- **Ages**: Check character ages against their birth dates in `CHR`.
-
-### C. Information & Epistemic Audit
-- **Who knows what, when?**: Track secrets and reveals in outline scenes via `Reveals:`, `Learns:`, and `Hidden From:`.
-- `specnovel.py check` automatically enforces blocking checks:
-  - Characters listed under `Hidden From:` must never appear in `Learns:` or act on that knowledge.
-  - Characters cannot know secrets before the scene where they learn or witness them.
-- Ensure dramatic ironies are maintained without accidental slip-ups.
-
-### D. Chekhov's Gun Setup & Payoff Audit
-- Every entity (object, plot device, weapon, secret) planted via `- **Plants:** [[OBJ-xxx]]` must eventually have a matching `- **Pays off:** [[OBJ-xxx]]`.
-- Orphan plants (introduced but never resolved) and unearned payoffs (appearing from nowhere without an earlier plant) fail `specnovel.py check` as blocking errors.
-- Run `python scripts/specnovel.py audit` to inspect the Chekhov distance matrix: flags setups paid off too quickly (anticlimax risk) or dormant for too long (>10 scenes).
-
----
-
-## 3. Developmental Editorial Telemetry Audit
-Execute developmental telemetry across the novel manuscript:
-```bash
-python scripts/specnovel.py audit
-python scripts/specnovel.py audit --json
-```
-Computes and diagnoses:
-1. **Pacing Waveform**: Visualizes scene-by-scene word counts, paragraph cadence, and average sentence length across reading order.
-2. **Dialogue Ratio**: Analyzes narrative dialogue density; flags scenes with white-room dialogue (>80%) or exposition dumps (<5%).
-3. **Character Agency & Screen-Time**: Measures POV frequency and scene appearances across the cast to diagnose forgotten characters or passive protagonists.
-4. **Chekhov Gun Distance Matrix**: Analyzes gap length between setups and payoffs.
-5. **Epistemic State Tracking**: Full map of which characters know which secrets across chapters.
-6. **Pacing Sag Detector**: Identifies sequences of 2 or more long scenes with zero plot progression or dramatic turns.
-
----
-
-## 4. Fact & Source Fidelity Audit
-
-Audits whether the manuscript honors the researched facts cataloged in `kb/facts/`:
-1. **Fact Check**: For any historical event, scientific procedure, legal process, or period object
-   appearing in a scene, trace its `[[FCT-...]]` link. Verify that the scene details conform to the
-   fact's statement and sources.
-2. **Anachronism Scan**:
-   - Check dialogue and narration for modern idioms, slang, or concepts that post-date the setting.
-   - For historical settings, verify suspect words against historical etymology and first-use records.
-3. **Documented Liberties**:
-   - Check if the scene deviates from known history or science.
-   - If a deviation is intentional, verify that the fact has a documented `Liberty:` note (so it can
-     be included in the book's Author's Note). If unintentional, flag it as a defect.
-
----
-
-## 4. Style Compliance Audit
-
-Audits `manuscript/<locale>/` against `story/style.md` and `# Locale: <locale>`:
-1. **Locale-Specific Sections & Glossary Guidelines**:
-   - Verify that `story/style.md` contains `# Locale: <locale>` sections for each language target configured in `story/config.md`.
-   - Verify that `## Glossary Guidelines` are defined if glossary compilation is enabled.
-2. **Anti-pattern Scan**:
-   - Search manuscript files for forbidden clichés, filter words ("she heard", "he felt"), and
-     generic AI-isms ("tapestry", "testament to", "breath she didn't know").
-3. **Dialogue Tag Discipline**:
-   - Verify that dialogue tags adhere to `style.md` rules (e.g. no adverbs on tags; action beats instead
-     of exotic verbs like *"retorted", "expounded"*; dialogue dashes or guillemets in appropriate locales).
-4. **POV and Tense Consistency**:
-   - Ensure the prose maintains the specified POV (e.g. close third, past tense) without accidental
-     head-hopping or tense slippage.
-5. **Sentence Rhythm & Pacing**:
-   - Check that action scenes use crisper sentence cadence, and reflective scenes allow deeper interiority.
-
----
-
-## 5. Drift Detection
-
-To detect manual changes made directly to drafts without updating the specification:
-```bash
-python scripts/specnovel.py status
-```
-If the output lists modified files in `abridged/` or `manuscript/` when no sync is in progress:
-1. Review the diff against the baseline (`git diff <baseline> -- abridged/ manuscript/`).
-2. If the edits were intentional narrative changes:
-   - If an author changed a plot event, character decision, or dialogue line in `abridged/` or `manuscript/`,
-     inform the author:
-     > *"In SpecNovelist, narrative truth originates in the plan (kb/ and outline/)."*
-   - Offer to backport those changes into `outline/` or `kb/` (using `novel-author` or `novel-outline`),
-     then accept the sync baseline.
-3. If the edits were unintended drift, offer to restore the files to the clean baseline.
-
----
-
-## 6. Bug & Defect Triage
-
-When the author or a reader reports an issue (e.g. *"In Chapter 4, Karl knows about the police raid before the telegram arrives"*):
-
-```mermaid
-flowchart TD
-    Issue["Reported Defect"] --> Search["1. Search Outline & KB for governing item"]
-    Search --> CaseA{"Does outline/KB specify the wrong event?"}
-    CaseA -- Yes --> FixSpec["Case 1: Plan Defect\nUpdate KB/outline (novel-author/outline)\nthen run novel-sync"]
-    CaseA -- No --> CaseB{"Did abridged/ miss an outline beat?"}
-    CaseB -- Yes --> FixAbridged["Case 2: Abridged Defect\nFix abridged beat (novel-abridge)\nthen re-render manuscript"]
-    CaseB -- No --> FixManuscript["Case 3: Manuscript Defect\nFix prose in manuscript/ (novel-write)"]
+uv run python scripts/specnovel.py trace CHR-001
+uv run python scripts/specnovel.py trace BET-001
+uv run python scripts/specnovel.py trace DIR-001
 ```
 
-1. **Case 1: Plan Defect (The spec is wrong or contradictory)**:
-   - The outline or KB mandated contradictory timing or impossible behavior.
-   - **Do not touch prose directly**. Propose the corrected `TML`, `CHR`, or `SCN` beat in the plan.
-   - Once approved, trigger `novel-sync` to propagate the fix cleanly.
-2. **Case 2: Abridged Defect (The outline was right, but abridged drifted)**:
-   - The outline specified the correct sequence, but `abridged/` dropped a key beat or misstated dialogue.
-   - Fix `abridged/`, verify that the beat works, then re-render the manuscript scene via `novel-sync`.
-3. **Case 3: Manuscript Defect (The plot is correct, but prose execution failed)**:
-   - The abridged draft was correct, but the manuscript prose introduced an anachronism, a style
-     violation, or a confusing sentence.
-   - Fix the prose directly in `manuscript/` and verify word counts and style rules.
+---
+
+## 2. Continuity & Epistemic Audit
+
+### A. Character & Timeline Continuity (`world/`)
+- **Physical Traits**: Audit `manuscript/` and `abridged/` against `world/characters/CHR-NNN.md`.
+- **Timeline & Travel**: Audit Beat `Time:` and `Place:` transitions against `world/timeline/` and `world/places/`.
+
+### B. Information & Epistemic Audit
+- Track secrets and reveals via `Reveals:`, `Learns:`, and `Hidden From:` on scenes/beats.
+- `specnovel.py check` enforces that characters never act on information before learning it or while listed under `Hidden From:`.
+
+### C. Chekhov's Gun Setup & Payoff Audit
+- Every entity planted via `- **Plants:** [[OBJ-NNN]]` must have a matching `- **Pays off:** [[OBJ-NNN]]` later in reading order.
 
 ---
 
-## Rules
+## 3. Fact & Style Compliance Audit
+- **Fact Fidelity**: Verify that scenes referencing `[[FCT-NNN]]` honor the claim and sources in `world/facts/` and `world/sources/`.
+- **Style & Directive Compliance**: Audit `manuscript/<locale>/` against `setup/style.md` (`# Locale: <locale>`) and all active `directives/DIR-NNN.md` linked to each chapter, scene, beat, or character.
 
-- Never fix a plot or continuity error by editing `manuscript/` alone; root causes must be fixed
-  in the upstream specification.
-- Never dismiss anachronisms or fact contradictions without checking if the author intended a
-  deliberate `Liberty:`.
-- Always verify all downstream effects with `specnovel.py trace <ID>`.
+---
+
+## 4. Defect Triage & Routing
+When a defect is found:
+1. Identify the earliest stage (`1..8` or `directives/`) where the defect originates.
+2. Route fixes through **`novel-feedback`** (to update upstream specs and lock in a `DIR-NNN` directive if needed) followed by **`novel-sync`** to propagate the fix downstream.
