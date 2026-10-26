@@ -436,13 +436,57 @@ def normalize(lines: Sequence[str]) -> List[str]:
     return out
 
 
+DIRECTIVE_COMMENT_PREFIX_RE = re.compile(r"^\s*<!--\s*Directives:\s*", re.I)
+
+
+def _comment_replacer(m: re.Match) -> str:
+    comment_content = m.group(0)
+    if DIRECTIVE_COMMENT_PREFIX_RE.match(comment_content):
+        return comment_content
+    return "\n" * comment_content.count("\n")
+
+
+def strip_comments_outside_fences(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    out_lines = []
+    in_fence = False
+    cur_block = []
+
+    for line in lines:
+        if FENCE_RE.match(line):
+            if not in_fence:
+                if cur_block:
+                    block_text = "".join(cur_block)
+                    clean = COMMENT_RE.sub(_comment_replacer, block_text)
+                    out_lines.append(clean)
+                    cur_block = []
+                in_fence = True
+                out_lines.append(line)
+            else:
+                in_fence = False
+                out_lines.append(line)
+        else:
+            if in_fence:
+                out_lines.append(line)
+            else:
+                cur_block.append(line)
+
+    if cur_block:
+        block_text = "".join(cur_block)
+        clean = COMMENT_RE.sub(_comment_replacer, block_text)
+        out_lines.append(clean)
+
+    return "".join(out_lines)
+
+
 def parse_markdown(text: str, rel: str) -> List[Section]:
+    clean_text = strip_comments_outside_fences(text)
     sections: List[Section] = []
     path_stack: Dict[int, str] = {}
     id_stack: List[Tuple[int, str]] = []
     in_fence = False
     cur = Section(rel, 1, 0, "", "(preamble)", title="(preamble)")
-    for i, line in enumerate(text.splitlines(), 1):
+    for i, line in enumerate(clean_text.splitlines(), 1):
         if FENCE_RE.match(line):
             in_fence = not in_fence
             cur.raw.append((i, line, True))
@@ -1907,6 +1951,7 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
         if not fp.is_file():
             continue
         content = fp.read_text(encoding="utf-8", errors="replace")
+        content = strip_comments_outside_fences(content)
 
         in_fence = False
         cur_id = None

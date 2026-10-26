@@ -177,6 +177,15 @@ class ProjectTest(unittest.TestCase):
         return code, json.loads(out)
 
     # ---------------------------------------------------------------- tests
+    def test_init_fresh_project_check_is_clean(self):
+        with tempfile.TemporaryDirectory() as fresh_tmp:
+            fresh_root = Path(fresh_tmp)
+            code, _ = self.run_cli("-C", str(fresh_root), "init")
+            self.assertEqual(code, 0)
+            code, res = self.json_cli("-C", str(fresh_root), "check")
+            self.assertEqual(res["errors"], [])
+            self.assertEqual(code, 0)
+
     def test_init_scaffolds_9_stages_and_directives(self):
         for rel in (
             "initial/synopsis.md",
