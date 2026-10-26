@@ -82,8 +82,10 @@ ILLUSTRATIONS = """\
 
 ## ILL-001: Hamburg Harbor Chart
 - **Type:** map
+- **Arcs:** [[ARC-001]]
+- **Dependencies:** [[BET-001]]
 - **Target:** publishable/graphics/ILL-001.png
-- **Prerequisites:** [[PLC-001]]
+- **Depicts:** [[PLC-001]]
 - **Caption:** Map of Hamburg Harbor Piers
 - **Description:** Period nautical chart of Hamburg piers in 1912.
 """
@@ -140,7 +142,7 @@ class ProjectTest(unittest.TestCase):
         self.run_cli("init")
         self.git("config", "user.email", "t@example.com")
         self.git("config", "user.name", "Test")
-        self.write("setup/synopsis.md", "---\ntitle: The Crossing\n---\n# Synopsis\n" + "word " * 50)
+        self.write("initial/synopsis.md", "---\ntitle: The Crossing\n---\n# Synopsis\n" + "word " * 50)
         self.write("setup/themes.md", THEMES)
         self.write("setup/style.md", "# Style\n# Locale: en-US\n## Glossary Guidelines\n## Graphics Guidelines\n## Publication & Book Design Guidelines\n" + "rule " * 500)
         self.write("world/characters/CHR-001-elena.md", CHAR)
@@ -175,10 +177,11 @@ class ProjectTest(unittest.TestCase):
         return code, json.loads(out)
 
     # ---------------------------------------------------------------- tests
-    def test_init_scaffolds_8_stages_and_directives(self):
+    def test_init_scaffolds_9_stages_and_directives(self):
         for rel in (
+            "initial/synopsis.md",
+            "initial/config.md",
             "setup/brief.md",
-            "setup/config.md",
             "setup/themes.md",
             "setup/style.md",
             "research/questions.md",
@@ -383,6 +386,47 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(any("BET-004 has no causal path to the root denouement (BET-003)" in e for e in res["essentialityErrors"]))
 
+        # 5. Illustration DAG rules:
+        #    a) Non-cover illustration missing Arcs fails check
+        self.write("narrative/beats.md", BEATS)
+        bad_ill_no_arc = ILLUSTRATIONS + "\n## ILL-002: Scene Sketch\n- **Type:** scene\n- **Description:** Sketch without arc.\n"
+        self.write("narrative/illustrations.md", bad_ill_no_arc)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("illustration ILL-002 must be associated with at least one story arc" in e for e in res["errors"]))
+
+        #    b) Cover / front-matter / back-matter illustration is exempt from requiring Arcs
+        cover_ill = ILLUSTRATIONS + "\n## ILL-002: Book Cover\n- **Type:** cover\n- **Description:** Front cover artwork.\n"
+        self.write("narrative/illustrations.md", cover_ill)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0)
+
+        #    c) Deprecated 'Associated Beats' field on illustration fails check
+        bad_ill_assoc = ILLUSTRATIONS + "\n## ILL-003: Bad Field\n- **Type:** scene\n- **Arcs:** [[ARC-001]]\n- **Associated Beats:** [[BET-001]]\n- **Description:** Uses deprecated field.\n"
+        self.write("narrative/illustrations.md", bad_ill_assoc)
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("deprecated 'Associated Beats:' field" in e for e in res["errors"]))
+
+        #    d) Illustration in Narrative DAG with dependencies (BET-001 -> ILL-001 -> BET-002)
+        self.write("narrative/illustrations.md", ILLUSTRATIONS)
+        beats_with_ill_dep = BEATS.replace(
+            "## BET-002: Karl refuses to board\n- **Place:** [[PLC-001]]\n- **Time:** 1912-04-10 Noon\n- **Arcs:** [[ARC-001]]\n- **Dependencies:** [[BET-001]]",
+            "## BET-002: Karl refuses to board\n- **Place:** [[PLC-001]]\n- **Time:** 1912-04-10 Noon\n- **Arcs:** [[ARC-001]]\n- **Dependencies:** [[BET-001]], [[ILL-001]]",
+        )
+        self.write("narrative/beats.md", beats_with_ill_dep)
+        outline_with_ill = OUTLINE.replace(
+            "- **Beats:** [[BET-001]]",
+            "- **Beats:** [[BET-001]]\n- **Illustrations:** [[ILL-001]]",
+        )
+        self.write("structure/outline.md", outline_with_ill)
+        code, dag_res = self.json_cli("dag")
+        self.assertEqual(code, 0)
+        self.assertTrue(dag_res["ok"])
+        self.assertIn("ILL-001", dag_res["nodes"])
+        self.assertIn("ILL-001", dag_res["edges"]["BET-001"])
+        self.assertIn("BET-002", dag_res["edges"]["ILL-001"])
+
     def test_directives_preservation_autolinking_and_factoring(self):
         # 1. Factor a shared instruction into DIR-001 across CHR-001 and SCN-001
         code, factor_res = self.json_cli(
@@ -466,7 +510,7 @@ title: "The Iron Mill"
 # Synopsis
 In [summer 1892], in an industrial town near [Pittsburgh], [Protagonist - Eldest Daughter] discovers a secret.
 """
-        self.write("setup/synopsis.md", synopsis_with_placeholders)
+        self.write("initial/synopsis.md", synopsis_with_placeholders)
         self.write("world/characters/CHR-003.md", "# CHR-003: [Protagonist - Eldest Daughter]\n- **Role:** Lead\n")
 
         code, items = self.json_cli("placeholders")
@@ -484,23 +528,28 @@ In [summer 1892], in an industrial town near [Pittsburgh], [Protagonist - Eldest
         self.assertIn("## RQ-001:", rq_content)
         self.assertIn("[[CHR-003]]", rq_content)
 
-    def test_parallel_sync_baselines_and_setup_delta(self):
+    def test_parallel_sync_baselines_and_initial_setup_delta(self):
         code, out = self.run_cli("accept", "--stage", "plan", "-m", "Initial baseline")
         self.assertEqual(code, 0)
         self.assertIn("Accepted", out)
 
         code, status_res = self.json_cli("status")
         self.assertEqual(code, 0)
+        self.assertIsNotNone(status_res["baselines"]["initial"])
         self.assertIsNotNone(status_res["baselines"]["setup"])
         self.assertIsNotNone(status_res["baselines"]["world"])
 
-        current_synopsis = (self.root / "setup/synopsis.md").read_text(encoding="utf-8")
-        self.write("setup/synopsis.md", current_synopsis + "\n\nNew premise turning point.\n")
+        current_synopsis = (self.root / "initial/synopsis.md").read_text(encoding="utf-8")
+        self.write("initial/synopsis.md", current_synopsis + "\n\nNew premise turning point.\n")
+
+        code, initial_delta = self.json_cli("delta", "--stage", "initial")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(initial_delta["changes"]), 1)
+        self.assertEqual(initial_delta["changes"][0]["file"], "initial/synopsis.md")
 
         code, setup_delta = self.json_cli("delta", "--stage", "setup")
         self.assertEqual(code, 0)
-        self.assertEqual(len(setup_delta["changes"]), 1)
-        self.assertEqual(setup_delta["changes"][0]["file"], "setup/synopsis.md")
+        self.assertEqual(len(setup_delta["changes"]), 0)
 
         code, world_delta = self.json_cli("delta", "--stage", "world")
         self.assertEqual(code, 0)
@@ -511,15 +560,17 @@ In [summer 1892], in an industrial town near [Pittsburgh], [Protagonist - Eldest
         ill_both = ILLUSTRATIONS + """
 ## ILL-002: Elena Portrait
 - **Type:** portrait
+- **Arcs:** [[ARC-001]]
 - **Target:** publishable/graphics/ILL-002.png
-- **Prerequisites:** [[CHR-001]]
+- **Depicts:** [[CHR-001]]
+- **Description:** Portrait of Elena Voss.
 """
         self.write("narrative/illustrations.md", ill_both)
 
-        # Reference ILL-001 in SCN-001 in structure/outline.md
+        # Reference ILL-001 in SCN-001 after BET-001 in structure/outline.md
         updated_outline = OUTLINE.replace(
-            "#### SCN-001: Elena receives the letter\n",
-            "#### SCN-001: Elena receives the letter\n- **Illustrations:** [[ILL-001]]\n",
+            "- **Beats:** [[BET-001]]\n",
+            "- **Beats:** [[BET-001]]\n- **Illustrations:** [[ILL-001]]\n",
         )
         self.write("structure/outline.md", updated_outline)
 

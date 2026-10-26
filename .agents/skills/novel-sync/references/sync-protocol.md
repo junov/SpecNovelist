@@ -1,17 +1,18 @@
-# 8-Stage Synchronization Protocol Reference
+# 9-Stage Synchronization Protocol Reference
 
 ## 1. Stage Dependency Order & Upstream Baselines
 
 | Stage (`--stage`) | Directory | Upstream Stages Monitored | Git Trailer Recorded |
 |---|---|---|---|
-| `setup` | `setup/` | — (root stage) | `Novel-Sync: setup` |
-| `research` | `research/` | `setup` | `Novel-Sync: research` |
-| `world` | `world/` | `setup`, `research` | `Novel-Sync: world` |
-| `narrative` | `narrative/` | `setup`, `world`, `directives` | `Novel-Sync: narrative` |
-| `structure` | `structure/` | `setup`, `world`, `narrative`, `directives` | `Novel-Sync: structure` |
-| `abridged` | `abridged/` | `setup`, `world`, `narrative`, `structure`, `directives` | `Novel-Sync: abridged` |
-| `manuscript` | `manuscript/` | `setup`, `world`, `narrative`, `structure`, `abridged`, `directives` | `Novel-Sync: manuscript` |
-| `publishable` | `publishable/` | All stages (`1..7`) + `directives` | `Novel-Sync: publishable` (+ `Novel-GFX-Sync: ILL-NNN`) |
+| `initial` | `initial/` | — (root stage) | `Novel-Sync: initial` |
+| `setup` | `setup/` | `initial`, `directives` | `Novel-Sync: setup` |
+| `research` | `research/` | `initial`, `setup`, `directives` | `Novel-Sync: research` |
+| `world` | `world/` | `initial`, `setup`, `research`, `directives` | `Novel-Sync: world` |
+| `narrative` | `narrative/` | `initial`, `setup`, `research`, `world`, `directives` | `Novel-Sync: narrative` |
+| `structure` | `structure/` | `initial`, `setup`, `research`, `world`, `narrative`, `directives` | `Novel-Sync: structure` |
+| `abridged` | `abridged/` | `initial`, `setup`, `research`, `world`, `narrative`, `structure`, `directives` | `Novel-Sync: abridged` |
+| `manuscript` | `manuscript/` | `initial`, `setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `directives` | `Novel-Sync: manuscript` |
+| `publishable` | `publishable/` | All stages (`1..8`) + `directives` | `Novel-Sync: publishable` (+ `Novel-ILL-Sync: ILL-NNN`) |
 
 ## 2. Generation Gate Rule
 `specnovel.py delta --stage <stage>` and `specnovel.py impact --stage <stage>` inspect Git history for `Novel-Sync: <stage>`. If no commit carries `Novel-Sync: <stage>`, synchronization is rejected with a Generation Gate error. Always run `novel-generate` for `<stage>` before running `novel-sync`.

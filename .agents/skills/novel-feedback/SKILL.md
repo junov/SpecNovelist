@@ -1,6 +1,6 @@
 ---
 name: novel-feedback
-description: Category 3 (Feedback) skill for SpecNovelist. Processes freeform author or editor feedback to edit data at the appropriate project stage (setup, research, world, narrative, structure, abridged, manuscript, publishable) and creates or updates persistent directives (DIR-NNN in directives/) so that user feedback is locked in and automatically preserved across future synchronization runs.
+description: Category 3 (Feedback) skill for SpecNovelist. Processes freeform author or editor feedback to edit data at the appropriate project stage (initial, setup, research, world, narrative, structure, abridged, manuscript, publishable) and creates or updates persistent directives (DIR-NNN in directives/) so that user feedback is locked in and automatically preserved across future synchronization runs.
 ---
 
 # `novel-feedback` — Freeform Feedback Triage & Directive Lock-In

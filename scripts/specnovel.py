@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """SpecNovelist helper for spec-driven novel writing in a git repository.
 
-A novel project is organized in 8 sequential stages plus a cross-stage directives directory:
+A novel project is organized in 9 sequential stages plus a cross-stage directives directory:
 
-  1. setup/        Synopsis, themes (THM), project configuration (config.md), brief.md, style.md.
-  2. research/     Research questions (RQ) needed for world building.
-  3. world/        Facts (FCT) & sources (SRC), characters (CHR), places (PLC), organizations (ORG),
+  1. initial/      Seed synopsis (synopsis.md) and basic project configuration (config.md).
+  2. setup/        Creative brief (brief.md), themes (themes.md, THM), and style guide (style.md).
+  3. research/     Research questions (RQ) needed for world building.
+  4. world/        Facts (FCT) & sources (SRC), characters (CHR), places (PLC), organizations (ORG),
                    objects (OBJ), world rules (WLD), timeline (TML), and glossary (GLS).
-  4. narrative/    Story arcs (ARC), narrative beats (BET - forming a DAG rooted at the denouement),
-                   and textual illustration specifications (ILL).
-  5. structure/    Physical structure: Volumes (VOL), front/back matter (including mandatory
+  5. narrative/    Story arcs (ARC), narrative beats (BET), and textual illustration specifications (ILL).
+                   Beats and illustrations form a unified Narrative DAG rooted at the denouement.
+  6. structure/    Physical structure: Volumes (VOL), front/back matter (including mandatory
                    acknowledgements.md), Acts (ACT), Chapters (CHP), and Scenes (SCN - ordered
                    sequences of beats and illustrations).
-  6. abridged/     Condensed novel chapters (all beats, plot movements, and key dialogues).
-  7. manuscript/   Polished literary prose organized by target locale (manuscript/<locale>/CHP-NNN.md).
-  8. publishable/  Rendered graphical assets (publishable/graphics/ILL-NNN.png) and compiled books.
+  7. abridged/     Condensed novel chapters (all beats, plot movements, and key dialogues).
+  8. manuscript/   Polished literary prose organized by target locale (manuscript/<locale>/CHP-NNN.md).
+  9. publishable/  Rendered graphical assets (publishable/graphics/ILL-NNN.png) and compiled books.
 
   directives/      Cross-stage directives (DIR-NNN) that lock in user feedback and factor shared
                    instructions referenced by records at any stage via [[DIR-NNN]].
@@ -76,6 +77,7 @@ class PlaceholderItem:
 
 
 TRAILER = "Novel-Sync"
+INITIAL = "initial"
 SETUP = "setup"
 RESEARCH = "research"
 WORLD = "world"
@@ -87,26 +89,27 @@ PUBLISHABLE = "publishable"
 DIRECTIVES = "directives"
 
 STAGES = (
-    SETUP,        # Stage 1
-    RESEARCH,     # Stage 2
-    WORLD,        # Stage 3
-    NARRATIVE,    # Stage 4
-    STRUCTURE,    # Stage 5
-    ABRIDGED,     # Stage 6
-    MANUSCRIPT,   # Stage 7
-    PUBLISHABLE,  # Stage 8
+    INITIAL,      # Stage 1
+    SETUP,        # Stage 2
+    RESEARCH,     # Stage 3
+    WORLD,        # Stage 4
+    NARRATIVE,    # Stage 5
+    STRUCTURE,    # Stage 6
+    ABRIDGED,     # Stage 7
+    MANUSCRIPT,   # Stage 8
+    PUBLISHABLE,  # Stage 9
 )
 
-SPEC_STAGES = (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE)
+SPEC_STAGES = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE)
 DERIVED_STAGES = (ABRIDGED, MANUSCRIPT, PUBLISHABLE)
-PLAN_DIRS = (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES)
-ALL_DIRS = (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, PUBLISHABLE, DIRECTIVES)
+PLAN_DIRS = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES)
+ALL_DIRS = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, PUBLISHABLE, DIRECTIVES)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 
-SYNOPSIS_FILE = "setup/synopsis.md"
+SYNOPSIS_FILE = "initial/synopsis.md"
+CONFIG_FILE = "initial/config.md"
 BRIEF_FILE = "setup/brief.md"
 STYLE_FILE = "setup/style.md"
-CONFIG_FILE = "setup/config.md"
 THEMES_FILE = "setup/themes.md"
 QUESTIONS_FILE = "research/questions.md"
 ARCS_FILE = "narrative/arcs.md"
@@ -118,6 +121,7 @@ GRAPHICS_DIR = "publishable/graphics"
 MIN_STYLE_WORDS = 400
 
 STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
+    INITIAL: (INITIAL,),
     SETUP: (SETUP,),
     RESEARCH: (RESEARCH,),
     WORLD: (WORLD,),
@@ -129,14 +133,15 @@ STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
 }
 
 UPSTREAM_DIRS: Dict[str, Tuple[str, ...]] = {
-    SETUP: (SETUP, DIRECTIVES),
-    RESEARCH: (SETUP, DIRECTIVES),
-    WORLD: (SETUP, RESEARCH, DIRECTIVES),
-    NARRATIVE: (SETUP, RESEARCH, WORLD, DIRECTIVES),
-    STRUCTURE: (SETUP, RESEARCH, WORLD, NARRATIVE, DIRECTIVES),
-    ABRIDGED: (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES),
-    MANUSCRIPT: (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, DIRECTIVES),
-    PUBLISHABLE: (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, DIRECTIVES),
+    INITIAL: (INITIAL, DIRECTIVES),
+    SETUP: (INITIAL, SETUP, DIRECTIVES),
+    RESEARCH: (INITIAL, SETUP, DIRECTIVES),
+    WORLD: (INITIAL, SETUP, RESEARCH, DIRECTIVES),
+    NARRATIVE: (INITIAL, SETUP, RESEARCH, WORLD, DIRECTIVES),
+    STRUCTURE: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, DIRECTIVES),
+    ABRIDGED: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES),
+    MANUSCRIPT: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, DIRECTIVES),
+    PUBLISHABLE: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, DIRECTIVES),
 }
 
 GENERATED = {"world/INDEX.md"}
@@ -514,14 +519,33 @@ def build_model(sources: Dict[str, str]) -> Model:
     return model
 
 
-# ------------------------------------------------------------------ Stage 4 (Narrative) & Stage 5 (Physical Structure)
+# ------------------------------------------------------------------ Stage 5 (Narrative) & Stage 6 (Physical Structure)
+COVER_AND_MATTER_ILL_TYPES = {
+    "cover", "front-matter", "front_matter", "back-matter", "back_matter",
+    "frontispiece", "endpaper", "colophon", "title-page", "title_page"
+}
+
+
+def is_cover_or_matter_illustration(sec: Section) -> bool:
+    itype = (sec.field_value("type", "role", "category") or "").strip().lower()
+    placement = (sec.field_value("placement", "location", "section") or "").strip().lower()
+    if itype in COVER_AND_MATTER_ILL_TYPES or placement in COVER_AND_MATTER_ILL_TYPES:
+        return True
+    if any(k in itype for k in ("cover", "front-matter", "back-matter", "frontispiece", "endpaper")):
+        return True
+    return False
+
+
 @dataclass
 class Narrative:
     arcs: List[str] = field(default_factory=list)
     beats: List[str] = field(default_factory=list)
     illustrations: List[str] = field(default_factory=list)
     beat_deps: Dict[str, Set[str]] = field(default_factory=dict)
+    ill_deps: Dict[str, Set[str]] = field(default_factory=dict)
+    node_deps: Dict[str, Set[str]] = field(default_factory=dict)
     beat_arcs: Dict[str, Set[str]] = field(default_factory=dict)
+    ill_arcs: Dict[str, Set[str]] = field(default_factory=dict)
     beat_places: Dict[str, Set[str]] = field(default_factory=dict)
     beat_time: Dict[str, str] = field(default_factory=dict)
     denouement_beats: List[str] = field(default_factory=list)
@@ -541,6 +565,29 @@ def narrative_of(model: Model) -> Narrative:
             nar.arcs.append(sid)
         elif s.prefix == "ILL":
             nar.illustrations.append(sid)
+            if s.has_field("associated_beats") or s.has_field("associated-beats") or s.has_field("associated beats"):
+                nar.problems.append(
+                    f"illustration {sid} uses deprecated 'Associated Beats:' field; use 'Dependencies:' in the Narrative DAG instead ({s.location})"
+                )
+            arcs = s.ref_ids_for_field("arcs", "arc", "story_arc", "story-arc", "plot")
+            if not arcs:
+                arcs = {r for r in s.ref_ids() if r.startswith("ARC-")}
+            nar.ill_arcs[sid] = arcs
+            if not arcs and not is_cover_or_matter_illustration(s):
+                nar.problems.append(
+                    f"illustration {sid} must be associated with at least one story arc [[ARC-...]] (unless Type is cover or front/back matter) ({s.location})"
+                )
+            deps = s.prereq_ids()
+            for d in sorted(deps):
+                if not d.startswith(("BET-", "ILL-")):
+                    nar.problems.append(
+                        f"illustration {sid} declares invalid dependency [[{d}]]; Narrative DAG dependencies must refer to beats (BET-...) or illustrations (ILL-...) ({s.location})"
+                    )
+                elif d == sid:
+                    nar.problems.append(f"illustration {sid} cannot depend on itself ({s.location})")
+            valid_deps = {d for d in deps if d.startswith(("BET-", "ILL-")) and d != sid}
+            nar.ill_deps[sid] = valid_deps
+            nar.node_deps[sid] = valid_deps
         elif s.prefix == "BET":
             nar.beats.append(sid)
             # 1. Place validation
@@ -566,14 +613,18 @@ def narrative_of(model: Model) -> Narrative:
             if not arcs:
                 nar.problems.append(f"beat {sid} must be associated with at least one story arc [[ARC-...]] ({s.location})")
 
-            # 4. Dependencies
+            # 4. Dependencies (can reference earlier BET-NNN or ILL-NNN nodes in the Narrative DAG)
             deps = s.prereq_ids()
             for d in sorted(deps):
-                if not d.startswith("BET-"):
-                    nar.problems.append(f"beat {sid} declares non-beat dependency [[{d}]]; beat dependencies must refer to other beats (BET-...) ({s.location})")
+                if not d.startswith(("BET-", "ILL-")):
+                    nar.problems.append(
+                        f"beat {sid} declares invalid dependency [[{d}]]; Narrative DAG dependencies must refer to beats (BET-...) or illustrations (ILL-...) ({s.location})"
+                    )
                 elif d == sid:
                     nar.problems.append(f"beat {sid} cannot depend on itself ({s.location})")
-            nar.beat_deps[sid] = {d for d in deps if d.startswith("BET-")}
+            valid_deps = {d for d in deps if d.startswith(("BET-", "ILL-")) and d != sid}
+            nar.beat_deps[sid] = valid_deps
+            nar.node_deps[sid] = valid_deps
 
             if s.is_denouement:
                 nar.denouement_beats.append(sid)
@@ -597,6 +648,7 @@ class Outline:
     scene_beats: Dict[str, List[str]] = field(default_factory=dict)          # SCN -> ordered [BET-...]
     scene_illustrations: Dict[str, List[str]] = field(default_factory=dict)  # SCN -> ordered [ILL-...]
     beat_positions: Dict[str, Tuple[int, int, str]] = field(default_factory=dict)  # BET -> (scene_idx, seq_idx, SCN)
+    node_positions: Dict[str, Tuple[int, int, str]] = field(default_factory=dict)  # (BET|ILL) -> (scene_idx, seq_idx, SCN)
     problems: List[str] = field(default_factory=list)
 
 
@@ -661,11 +713,13 @@ def outline_of(model: Model) -> Outline:
             else:
                 o.problems.append(f"scene {sid} is not nested under a chapter heading ({s.location})")
 
-    # Compute global beat positions in reading order: (1-based scene index, 1-based sequence index in scene, scene ID)
+    # Compute global beat & illustration positions in reading order: (1-based scene index, 1-based sequence index in scene, scene ID)
     for scn_idx, sid in enumerate(o.scenes, 1):
-        for seq_idx, bid in enumerate(o.scene_beats.get(sid, []), 1):
-            if bid not in o.beat_positions:
-                o.beat_positions[bid] = (scn_idx, seq_idx, sid)
+        for seq_idx, nid in enumerate(o.scene_sequence.get(sid, []), 1):
+            if nid not in o.node_positions:
+                o.node_positions[nid] = (scn_idx, seq_idx, sid)
+            if nid.startswith("BET-") and nid not in o.beat_positions:
+                o.beat_positions[nid] = (scn_idx, seq_idx, sid)
 
     return o
 
@@ -1426,18 +1480,31 @@ def build_story_dag(p: Project) -> StoryDAG:
                     if rid not in dag.positions:
                         dag.positions[rid] = idx
 
-    for bid, (scn_idx, seq_idx, _) in o.beat_positions.items():
-        dag.beat_order[bid] = (scn_idx, seq_idx)
-        if bid not in dag.positions:
-            dag.positions[bid] = scn_idx
+    for nid, (scn_idx, seq_idx, _) in o.node_positions.items():
+        dag.beat_order[nid] = (scn_idx, seq_idx)
+        if nid not in dag.positions:
+            dag.positions[nid] = scn_idx
 
-    # 2. Populate nodes & edges from Stage 4 Beat DAG (BET-NNN)
+    # 2. Populate nodes & edges from Stage 5 Narrative DAG (BET-NNN and ILL-NNN)
     for bid in nar.beats:
         dag.nodes.add(bid)
-        for dep in nar.beat_deps.get(bid, set()):
+        for dep in nar.node_deps.get(bid, set()):
             dag.nodes.add(dep)
             dag.edges.setdefault(dep, set()).add(bid)
             dag.reverse_edges.setdefault(bid, set()).add(dep)
+
+    for iid in nar.illustrations:
+        isec = plan.defs.get(iid)
+        deps = nar.node_deps.get(iid, set())
+        is_scheduled = iid in o.node_positions
+        is_depended_on = any(iid in dset for dset in nar.node_deps.values())
+        if deps or is_scheduled or is_depended_on or (isec and not is_cover_or_matter_illustration(isec)):
+            if deps or is_scheduled or is_depended_on:
+                dag.nodes.add(iid)
+                for dep in deps:
+                    dag.nodes.add(dep)
+                    dag.edges.setdefault(dep, set()).add(iid)
+                    dag.reverse_edges.setdefault(iid, set()).add(dep)
 
     # Identify root denouement beat
     explicit_root = None
@@ -1501,28 +1568,31 @@ def check_dag_cycles(dag: StoryDAG) -> List[str]:
 
 
 def check_reading_order_coherence(dag: StoryDAG, p: Project) -> List[str]:
-    """Verify that Stage 5 (Physical Structure) serializes the Stage 4 Beat DAG in valid topological order."""
+    """Verify that Stage 6 (Physical Structure) serializes the Stage 5 Narrative DAG in valid topological order."""
     errors: List[str] = []
     o = p.outline
     if not o.scenes:
         return errors
 
     for node in sorted(dag.nodes):
-        if not node.startswith("BET-"):
+        if not node.startswith(("BET-", "ILL-")):
             continue
-        if node not in o.beat_positions:
+        if node.startswith("BET-") and node not in o.node_positions:
             errors.append(f"reading order violation: beat {node} is defined in {NARRATIVE}/ but not scheduled in any scene in {STRUCTURE}/")
             continue
-        node_scn_idx, node_seq_idx, node_scn = o.beat_positions[node]
+        if node not in o.node_positions:
+            continue
+        node_scn_idx, node_seq_idx, node_scn = o.node_positions[node]
         prereqs = dag.reverse_edges.get(node, set())
         for req in sorted(prereqs):
-            if req not in o.beat_positions:
+            if req not in o.node_positions:
                 errors.append(f"reading order violation: dependency {req} of {node} never appears in any scene in {STRUCTURE}/")
                 continue
-            req_scn_idx, req_seq_idx, req_scn = o.beat_positions[req]
+            req_scn_idx, req_seq_idx, req_scn = o.node_positions[req]
             if (req_scn_idx, req_seq_idx) >= (node_scn_idx, node_seq_idx):
+                kind = "beat" if node.startswith("BET-") else "illustration"
                 errors.append(
-                    f"reading order violation: beat {node} (in {node_scn}, scene #{node_scn_idx}) depends on {req} "
+                    f"reading order violation: {kind} {node} (in {node_scn}, scene #{node_scn_idx}) depends on {req} "
                     f"(in {req_scn}, scene #{req_scn_idx}), but {req} does not precede {node} in reading order"
                 )
     return errors
@@ -1560,6 +1630,10 @@ def check_essentiality_to_root(dag: StoryDAG, p: Optional[Project] = None) -> Tu
             if sec:
                 func = (sec.field_value("function", "role") or "").strip().lower()
                 if func in artistic_functions:
+                    reachable.add(n)
+                    inessential.remove(n)
+                elif n.startswith("ILL-") and not any(n in dset for dset in p.narrative.node_deps.values()):
+                    # Illustrations placed in scenes that do not block downstream beats are visual accompaniments
                     reachable.add(n)
                     inessential.remove(n)
 
@@ -1717,7 +1791,7 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
             raise NovelError(f"Path not found: {target_path}")
     else:
         files = []
-        for d in (SETUP, WORLD, NARRATIVE, STRUCTURE):
+        for d in (INITIAL, SETUP, WORLD, NARRATIVE, STRUCTURE):
             dp = root / d
             if dp.is_dir():
                 for f in dp.rglob("*.md"):
@@ -2271,8 +2345,8 @@ def compute_impact(p: Project, stage: str, locale: Optional[str] = None, allow_u
         ill_imp["upstreamChanges"] = [c.label() for c in changes]
         return ill_imp
 
-    # For Stages 2-5 (spec stages: research, world, narrative, structure)
-    if stage in (RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+    # For Stages 2-6 (spec stages: setup, research, world, narrative, structure)
+    if stage in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
         stage_records = [s for s in plan.defs.values() if stage_of_section(s) == stage]
         impacted_records = []
         for sec in stage_records:
@@ -2443,7 +2517,7 @@ def cmd_init(root: Path, args) -> int:
     scaffold_dirs = (
         [f"{WORLD}/{w}" for w in WORLD_FOLDERS]
         + [
-            SETUP, RESEARCH, NARRATIVE, STRUCTURE,
+            INITIAL, SETUP, RESEARCH, NARRATIVE, STRUCTURE,
             f"{STRUCTURE}/front-matter", f"{STRUCTURE}/back-matter",
             ABRIDGED, MANUSCRIPT, f"{MANUSCRIPT}/en-US",
             PUBLISHABLE, GRAPHICS_DIR, f"{PUBLISHABLE}/en-US",
@@ -2477,7 +2551,7 @@ def cmd_status(git: Git, args) -> int:
     drift = {st: git.changed_since(git.baseline(st), *STAGE_DIRS.get(st, (st,))) for st in STAGES}
     upstream_drift = {
         st: [d for d in git.changed_since(git.baseline(st), *UPSTREAM_DIRS.get(st, ())) if d["file"] not in GENERATED]
-        for st in STAGES if st != SETUP
+        for st in STAGES if st != INITIAL
     }
     words = {st: sum(word_count(s.body) for s in p.layers[st].scenes.values()) for st in LAYERS}
     placeholders = scan_placeholders(p)
@@ -2828,7 +2902,7 @@ def cmd_impact(git: Git, args) -> int:
         print("\n".join(out))
         return 0
 
-    if stage in (RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+    if stage in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
         out = [f"# Impact on {stage}/", "", baseline_line(stage, imp.get("baseline")),
                f"Upstream changes since baseline: {len(imp['upstreamChanges'])}", ""]
         if imp.get("records"):

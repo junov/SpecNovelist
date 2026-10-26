@@ -8,9 +8,9 @@ status: draft
 # Novel Brief
 
 <!--
-STAGE 1: SETUP (setup/brief.md).
+STAGE 2: SETUP (setup/brief.md).
 Filled in by the novel-generate (stage: setup) interview. It records the core creative decisions
-that refine setup/synopsis.md. Use [[ID]] links to cataloged items once they exist.
+that refine initial/synopsis.md. Use [[ID]] links to cataloged items once they exist.
 -->
 
 ## Premise

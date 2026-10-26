@@ -1,11 +1,11 @@
 ---
 name: novel-sync
-description: Category 2 (Synchronization) skill for SpecNovelist. Incrementally updates data for any of the 8 project stages (setup, research, world, narrative, structure, abridged, manuscript, publishable) based on edits made to earlier stages. Enforces the Synchronization Generation Gate (cannot run until initial generation has been performed at least once for the target stage), respects and preserves existing [[DIR-NNN]] directives on updated records, automatically links relevant pre-existing directives to newly created records, and uses directives as a DRY factoring single source of truth.
+description: Category 2 (Synchronization) skill for SpecNovelist. Incrementally updates data for any of the 9 project stages (initial, setup, research, world, narrative, structure, abridged, manuscript, publishable) based on edits made to earlier stages. Enforces the Synchronization Generation Gate (cannot run until initial generation has been performed at least once for the target stage), respects and preserves existing [[DIR-NNN]] directives on updated records, automatically links relevant pre-existing directives to newly created records, and uses directives as a DRY factoring single source of truth.
 ---
 
 # `novel-sync` — Incremental Stage Synchronization Engine
 
-This skill implements **Category 2: Synchronization** across the 8-stage SpecNovelist pipeline. When upstream stages (`setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `manuscript`) are edited, `novel-sync` computes the exact impact delta and incrementally updates the target stage while enforcing directive preservation, automatic directive linking on new records, and DRY directive factoring.
+This skill implements **Category 2: Synchronization** across the 9-stage SpecNovelist pipeline. When upstream stages (`initial`, `setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `manuscript`) are edited, `novel-sync` computes the exact impact delta and incrementally updates the target stage while enforcing directive preservation, automatic directive linking on new records, and DRY directive factoring.
 
 ---
 

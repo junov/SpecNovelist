@@ -1,39 +1,41 @@
 # SpecNovelist Agent Guidelines (Always Active)
 
 This project operates on the **Spec-as-Source** paradigm adapted for fiction writing.
-In this repository, **structured Markdown specifications across an 8-stage pipeline plus a cross-stage `directives/` repository are the source of truth**, while the narrative drafts in `abridged/`, `manuscript/`, and `publishable/` are derived stages generated and synchronized by AI writing agents.
+In this repository, **structured Markdown specifications across a 9-stage pipeline plus a cross-stage `directives/` repository are the source of truth**, while the narrative drafts in `abridged/`, `manuscript/`, and `publishable/` are derived stages generated and synchronized by AI writing agents.
 
 ---
 
-## 1. The 8-Stage Project Architecture & Directives
+## 1. The 9-Stage Project Architecture & Directives
 
-Each of the 8 project stages lives in its own top-level subdirectory, accompanied by the cross-stage `directives/` subdirectory:
+Each of the 9 project stages lives in its own top-level subdirectory, accompanied by the cross-stage `directives/` subdirectory:
 
-1. **`setup/` (Stage 1 — Setup)**:
+1. **`initial/` (Stage 1 — Initial)**:
    - `synopsis.md`: The seed synopsis.
-   - `themes.md`: Core themes (`THM-NNN`).
    - `config.md`: **Project Configuration Specification.** Strict Markdown schema defining Author Identity, target locales (with one designated `[primary]`), optional foreword path, glossary and bibliography compilation toggles, and publication metadata.
+2. **`setup/` (Stage 2 — Setup)**:
    - `brief.md`: Creative parameters: premise, genre, audience, length, POV, setting eras, research rigor.
+   - `themes.md`: Core themes (`THM-NNN`).
    - `style.md`: **Binding writing-style guide** governing voice, rhythm, POV, diction, dialogue conventions, interiority, glossary guidelines (`## Glossary Guidelines`), illustration guidelines (`## Graphics Guidelines`), book design guidelines (`## Publication & Book Design Guidelines`), and locale-specific sections (`# Locale: <locale>`).
-2. **`research/` (Stage 2 — Research Questions)**:
+3. **`research/` (Stage 3 — Research Questions)**:
    - `questions.md`: Cataloged world-building and factual research questions (`RQ-NNN`).
-3. **`world/` (Stage 3 — World)**:
+4. **`world/` (Stage 4 — World)**:
    - `facts/` (`FCT-NNN`, answers to research questions citing verified sources in `sources/SRC-NNN.md`), `characters/` (`CHR-NNN`), `places/` (`PLC-NNN`), `organizations/` (`ORG-NNN`), `objects/` (`OBJ-NNN`), `rules/` (`WLD-NNN`), `timeline/` (`TML-NNN`), and `glossary/` (`GLS-NNN`).
-4. **`narrative/` (Stage 4 — Narrative Structure)**:
+5. **`narrative/` (Stage 5 — Narrative Structure)**:
    - `arcs.md`: Story arcs (`ARC-NNN`).
-   - `beats.md`: Narrative beats (`BET-NNN`). Every beat **must** specify a `Place:` (`[[PLC-NNN]]`), a `Time:`, and at least one associated story arc in `Arcs:` (`[[ARC-NNN]]`). Beats form a **Directed Acyclic Graph (DAG)** via `Dependencies:` (`[[BET-NNN]]`) referring to earlier beats required for causality, narrative coherence, or dramatic effect. The root of the Beat DAG is the **denouement** (`Denouement: true`).
-   - `illustrations.md`: Textual descriptions of illustrations (`ILL-NNN`). At Stage 4, illustrations are purely textual specifications, not graphical files.
-5. **`structure/` (Stage 5 — Physical Structure)**:
+   - `beats.md`: Narrative beats (`BET-NNN`). Every beat **must** specify a `Place:` (`[[PLC-NNN]]`), a `Time:`, and at least one associated story arc in `Arcs:` (`[[ARC-NNN]]`).
+   - `illustrations.md`: Textual descriptions of illustrations (`ILL-NNN`). At Stage 5, illustrations are purely textual specifications, not graphical files. Like beats, every illustration **must** be associated with at least one story arc in `Arcs:` (`[[ARC-NNN]]`), with the exception of illustrations used for covers (`Type: cover`) and front/back matter (`Type: front-matter` | `back-matter`).
+   - **Unified Narrative DAG**: Beats (`BET-NNN`) and illustrations (`ILL-NNN`) are both nodes in the **Narrative DAG**, governed by `Dependencies:` (`[[BET-NNN]]`, `[[ILL-NNN]]`) referring to earlier nodes required for causality, narrative coherence, or dramatic effect. Do **not** use an "Associated Beats" field on illustrations—relations between beats and illustrations are governed strictly by DAG dependencies. The root of the Narrative DAG is the **denouement** (`Denouement: true`).
+6. **`structure/` (Stage 6 — Physical Structure)**:
    - `outline.md`: The physical organization of the book in reading order: Volumes (`VOL-NNN`), Acts (`ACT-NNN`), Chapters (`CHP-NNN`), and Scenes (`SCN-NNN` — each containing an ordered sequence of beats `[[BET-NNN]]` and illustrations `[[ILL-NNN]]`, target word count, POV, setting, and key dialogue).
    - `front-matter/` and `back-matter/acknowledgements.md` (**Mandatory Verbatim Acknowledgements** disclosing all contributing AI models).
-6. **`abridged/` (Stage 6 — Abridged Novel)**:
+7. **`abridged/` (Stage 7 — Abridged Novel)**:
    - Condensed chapter drafts (`abridged/CHP-NNN.md`) containing all beats, causal turns, and essential dialogues with lean descriptive texture.
-7. **`manuscript/` (Stage 7 — Manuscript)**:
+8. **`manuscript/` (Stage 8 — Manuscript)**:
    - Polished literary prose organized by locale (`manuscript/<locale>/CHP-NNN.md`), rendered from `abridged/` + `setup/style.md` + `world/` + `directives/`. Zero visible metadata.
-8. **`publishable/` (Stage 8 — Publishable Material)**:
+9. **`publishable/` (Stage 9 — Publishable Material)**:
    - `publishable/graphics/`: Rendered graphical assets (`ILL-NNN.png` and localized variants `ILL-NNN.<locale>.png`) generated from `narrative/illustrations.md` for active illustrations placed in `structure/outline.md`.
    - `publishable/<locale>/`: Compiled books in `.md`, `.docx`, `.epub`, and `.pdf` formats via `specnovel.py compile`, with auto-generated bibliographies and glossaries.
-9. **`directives/` (Cross-Stage Directives Repository)**:
+10. **`directives/` (Cross-Stage Directives Repository)**:
    - Stores cataloged directives (`directives/DIR-NNN.md`): instructions that do not fall into any other data category.
    - Data records at **any** stage may reference `[[DIR-NNN]]` via `- **Directives:** [[DIR-NNN]]`.
    - Directives serve two core purposes:
@@ -44,8 +46,8 @@ Each of the 8 project stages lives in its own top-level subdirectory, accompanie
 
 ## 2. Core Operational Rules for Agents
 
-1. **8-Stage Upstream Truth & Synchronization Generation Gate**:
-   - Never edit downstream stages (`abridged/`, `manuscript/`, `publishable/`) to alter plot events, character decisions, or world facts without updating the upstream stage (`setup/`, `research/`, `world/`, `narrative/`, `structure/`, or `directives/`) first.
+1. **9-Stage Upstream Truth & Synchronization Generation Gate**:
+   - Never edit downstream stages (`abridged/`, `manuscript/`, `publishable/`) to alter plot events, character decisions, or world facts without updating the upstream stage (`initial/`, `setup/`, `research/`, `world/`, `narrative/`, `structure/`, or `directives/`) first.
    - **Synchronization Generation Gate**: Synchronization (`novel-sync`, `specnovel.py delta --stage <stage>`, `specnovel.py impact --stage <stage>`) **cannot** be performed on a stage until initial generation (`novel-generate` + `specnovel.py accept --stage <stage>`) has been performed at least once for that stage.
 2. **Permanent IDs & Traceability**:
    - Every cataloged entity has a permanent, unique identifier (`PREFIX-NNN`: `THM`, `RQ`, `FCT`, `SRC`, `CHR`, `PLC`, `ORG`, `OBJ`, `WLD`, `TML`, `GLS`, `ARC`, `BET`, `ILL`, `VOL`, `ACT`, `CHP`, `SCN`, `DIR`).
@@ -54,10 +56,11 @@ Each of the 8 project stages lives in its own top-level subdirectory, accompanie
 3. **No Researched Facts Without Verified Sources**:
    - Every fact (`FCT` in `world/facts/`) must cite at least one verified source record (`SRC` in `world/sources/`) and link to the research question (`RQ` in `research/questions.md`) it resolves.
    - Convert `[...]` or `<...>` placeholders into `RQ-NNN` items via `uv run python scripts/specnovel.py placeholders --create-rq`.
-4. **Stage 4 Beat DAG & Stage 5 Topological Serialization**:
-   - Every `BET-NNN` in `narrative/beats.md` must have `Place: [[PLC-NNN]]`, `Time:`, `Arcs: [[ARC-NNN]]`, and `Dependencies: [[BET-NNN]]` (or `none`).
-   - The Beat DAG must be acyclic and rooted at the final denouement (`- **Denouement:** true`), with every beat having a directed path to the denouement.
-   - In Stage 5 (`structure/outline.md`), scenes (`SCN-NNN`) sequence beats (`[[BET-NNN]]`) and illustrations (`[[ILL-NNN]]`). Every beat's dependencies must precede it in the physical reading order of `structure/outline.md`.
+4. **Stage 5 Narrative DAG & Stage 6 Topological Serialization**:
+   - Every `BET-NNN` in `narrative/beats.md` must have `Place: [[PLC-NNN]]`, `Time:`, `Arcs: [[ARC-NNN]]`, and `Dependencies: [[BET-NNN]]` / `[[ILL-NNN]]` (or `none`).
+   - Every `ILL-NNN` in `narrative/illustrations.md` is a node in the Narrative DAG with `Dependencies:` (`[[BET-NNN]]`, `[[ILL-NNN]]`, or `none`) and must have `Arcs: [[ARC-NNN]]` unless used for covers or front/back matter.
+   - The Narrative DAG must be acyclic and rooted at the final denouement (`- **Denouement:** true`), with every beat having a directed path to the denouement.
+   - In Stage 6 (`structure/outline.md`), scenes (`SCN-NNN`) sequence beats (`[[BET-NNN]]`) and illustrations (`[[ILL-NNN]]`). Every node's dependencies must precede it in the physical reading order of `structure/outline.md`.
    - Validate via `uv run python scripts/specnovel.py dag` and `uv run python scripts/specnovel.py check`.
 5. **Directives: Preservation, Auto-Linking, and DRY Factoring**:
    - **Preservation**: Synchronization tasks updating an existing record must respect and preserve all `[[DIR-NNN]]` references attached to that record (`specnovel.py check` blocks dropped directives).
@@ -81,8 +84,8 @@ The creation and maintenance process uses **3 core operational skill categories*
 
 | Category / Skill | Primary Role | When to Activate |
 |---|---|---|
-| **1. Generation (`novel-generate`)** | Initial Stage Data Generation & Directive Factoring | When generating data for any of the 8 stages (`setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `manuscript`, `publishable`) for the first time based on earlier stages and author interview questions. Automatically factors shared instructions into `DIR-NNN` directives and commits the initial stage baseline. |
+| **1. Generation (`novel-generate`)** | Initial Stage Data Generation & Directive Factoring | When generating data for any of the 9 stages (`initial`, `setup`, `research`, `world`, `narrative`, `structure`, `abridged`, `manuscript`, `publishable`) for the first time based on earlier stages and author interview questions. Automatically factors shared instructions into `DIR-NNN` directives and commits the initial stage baseline. |
 | **2. Synchronization (`novel-sync`)** | Incremental Stage Synchronization | When incrementally updating a stage based on edits made to earlier stages. Requires initial generation to have been completed at least once for the target stage. Respects and preserves existing `[[DIR-NNN]]` directives, auto-links relevant directives to newly created records, and factors shared instructions into directives. |
 | **3. Feedback (`novel-feedback`)** | Freeform Feedback Triage & Directive Lock-In | When editing project data across stages in response to freeform author/editor feedback, and creating or factoring `DIR-NNN` directives in `directives/` to lock in user feedback across future synchronizations. |
-| **Diagnostic: `novel-verify`** | Continuity, Beat DAG & Quality Assurance | When auditing Beat DAG causality, topological physical serialization, fact fidelity, directive preservation, style compliance, or triaging defects. |
+| **Diagnostic: `novel-verify`** | Continuity, Narrative DAG & Quality Assurance | When auditing Narrative DAG causality, topological physical serialization, fact fidelity, directive preservation, style compliance, or triaging defects. |
 | **Diagnostic: `novel-analyze`** | Developmental Editorial & Style Telemetry | When generating metrics-driven analysis reports (`specnovel.py audit --report`), comparing style-reflective metrics against `setup/style.md`, auditing cross-chapter consistency, and zooming in on structural or prose hotspots with `[[ID]]` wiki-links. |

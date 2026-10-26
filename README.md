@@ -1,35 +1,37 @@
 # SpecNovelist
 
-**SpecNovelist** is a Git-native, **Spec-as-Source** toolkit and agent skill suite for writing long-form fiction. All project data is organized into an **8-stage pipeline** plus a cross-stage **`directives/`** repository where upstream specifications are the single source of truth and downstream drafts and deliverables are incrementally generated and synchronized.
+**SpecNovelist** is a Git-native, **Spec-as-Source** toolkit and agent skill suite for writing long-form fiction. All project data is organized into a **9-stage pipeline** plus a cross-stage **`directives/`** repository where upstream specifications are the single source of truth and downstream drafts and deliverables are incrementally generated and synchronized.
 
 ---
 
-## 1. The 8-Stage Pipeline & Directives Architecture
+## 1. The 9-Stage Pipeline & Directives Architecture
 
 ```mermaid
 flowchart LR
-    S1["1. setup/\nSynopsis, Themes (THM),\nConfig, Brief, Style"] --> S2["2. research/\nResearch Questions\n(RQ)"]
-    S2 --> S3["3. world/\nFacts (FCT+SRC), CHR,\nPLC, ORG, OBJ, WLD"]
-    S3 --> S4["4. narrative/\nArcs (ARC), Beat DAG (BET),\nIllustration Specs (ILL)"]
-    S4 --> S5["5. structure/\nVolumes, Acts, Chapters,\nScenes (SCN), Matter"]
-    S5 --> S6["6. abridged/\nCondensed Chapter\nDrafts"]
-    S6 --> S7["7. manuscript/\nPolished Prose per\nLocale"]
-    S7 --> S8["8. publishable/\nRendered Graphics (ILL) &\nEPUB / PDF / DOCX"]
-    DIR["directives/\nCross-Stage Directives (DIR)\nFeedback Lock-In & DRY Factoring"] -.-> S1 & S3 & S4 & S5 & S6 & S7 & S8
+    S1["1. initial/\nSynopsis &\nBasic Config"] --> S2["2. setup/\nBrief, Themes (THM),\n& Style Guide"]
+    S2 --> S3["3. research/\nResearch Questions\n(RQ)"]
+    S3 --> S4["4. world/\nFacts (FCT+SRC), CHR,\nPLC, ORG, OBJ, WLD"]
+    S4 --> S5["5. narrative/\nArcs (ARC) & Unified\nNarrative DAG (BET, ILL)"]
+    S5 --> S6["6. structure/\nVolumes, Acts, Chapters,\nScenes (SCN), Matter"]
+    S6 --> S7["7. abridged/\nCondensed Chapter\nDrafts"]
+    S7 --> S8["8. manuscript/\nPolished Prose per\nLocale"]
+    S8 --> S9["9. publishable/\nRendered Graphics (ILL) &\nEPUB / PDF / DOCX"]
+    DIR["directives/\nCross-Stage Directives (DIR)\nFeedback Lock-In & DRY Factoring"] -.-> S1 & S2 & S4 & S5 & S6 & S7 & S8 & S9
 ```
 
 ### Directory Layout
 ```text
 <project-root>/
-├── setup/                      # Stage 1: Setup
-│   ├── config.md               # Author identity, target locales, compilation toggles
+├── initial/                    # Stage 1: Initial
 │   ├── synopsis.md             # Seed synopsis
+│   └── config.md               # Author identity, target locales, compilation toggles
+├── setup/                      # Stage 2: Setup
 │   ├── brief.md                # Creative interview decisions & word count targets
 │   ├── themes.md               # Thematic pillars (THM-NNN)
 │   └── style.md                # Binding style guide, graphics rules, & locale rules
-├── research/                   # Stage 2: Research Questions
+├── research/                   # Stage 3: Research Questions
 │   └── questions.md            # World-building research questions (RQ-NNN)
-├── world/                      # Stage 3: World
+├── world/                      # Stage 4: World
 │   ├── facts/                  # Sourced facts answering RQs (FCT-NNN)
 │   ├── sources/                # Verified bibliographic sources (SRC-NNN)
 │   ├── characters/             # Character dossiers (CHR-NNN)
@@ -39,20 +41,20 @@ flowchart LR
 │   ├── rules/                  # World rules & systems (WLD-NNN)
 │   ├── timeline/               # Chronological events (TML-NNN)
 │   └── glossary/               # Glossary entries (GLS-NNN)
-├── narrative/                  # Stage 4: Narrative Structure
+├── narrative/                  # Stage 5: Narrative Structure
 │   ├── arcs.md                 # Story arcs (ARC-NNN)
-│   ├── beats.md                # Narrative beats (BET-NNN) forming a DAG rooted at Denouement
-│   └── illustrations.md        # Textual illustration descriptions (ILL-NNN)
-├── structure/                  # Stage 5: Physical Structure
+│   ├── beats.md                # Narrative beats (BET-NNN) in the Narrative DAG
+│   └── illustrations.md        # Textual illustration nodes (ILL-NNN) in the Narrative DAG
+├── structure/                  # Stage 6: Physical Structure
 │   ├── outline.md              # Volumes (VOL), Acts (ACT), Chapters (CHP), Scenes (SCN)
 │   ├── front-matter/           # Optional foreword / dedication
 │   └── back-matter/
 │       └── acknowledgements.md # Mandatory verbatim AI & contributor acknowledgements
-├── abridged/                   # Stage 6: Abridged Novel
+├── abridged/                   # Stage 7: Abridged Novel
 │   └── CHP-NNN.md              # Condensed chapter drafts with all beats & key dialogue
-├── manuscript/                 # Stage 7: Manuscript
+├── manuscript/                 # Stage 8: Manuscript
 │   └── <locale>/CHP-NNN.md     # Polished prose per target locale
-├── publishable/                # Stage 8: Publishable Material
+├── publishable/                # Stage 9: Publishable Material
 │   ├── graphics/               # Rendered graphical assets (ILL-NNN[.<locale>].png)
 │   └── <locale>/               # Compiled books (.md, .docx, .epub, .pdf)
 └── directives/                 # Cross-Stage Directives Repository

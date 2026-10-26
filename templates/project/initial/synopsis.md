@@ -4,7 +4,7 @@ title: <Working title>
 # Synopsis
 
 <!--
-STAGE 1: SETUP (setup/synopsis.md).
+STAGE 1: INITIAL (initial/synopsis.md).
 Replace this comment with a high-level synopsis of the novel: anywhere from one paragraph to a
 few pages. It does not need to be complete or polished; the novel-generate interview fills the
 gaps. Helpful things to include if you know them:
