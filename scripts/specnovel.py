@@ -2705,20 +2705,20 @@ def cmd_init(root: Path, args) -> int:
         subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
         print("created  git repository")
     git = Git(root)
-    templates = Path(__file__).resolve().parent.parent / "templates" / "project"
-    if templates.is_dir():
-        for src in sorted(templates.rglob("*")):
-            if src.is_file():
-                rel = src.relative_to(templates)
-                dst = git.root / rel
-                if dst.exists():
-                    print(f"exists   {rel.as_posix()}")
-                else:
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(src, dst)
-                    print(f"created  {rel.as_posix()}")
-    else:
-        print(f"warning: templates not found at {templates}", file=sys.stderr)
+
+    initial_dir = git.root / INITIAL
+    initial_dir.mkdir(parents=True, exist_ok=True)
+    synopsis_p = initial_dir / "synopsis.md"
+    if not synopsis_p.exists():
+        title = getattr(args, "title", None) or "Untitled Novel"
+        synopsis_p.write_text(f"# Synopsis: {title}\n\n## Premise\n\n## Core Characters & Conflict\n\n## Plot Progression & Ending\n", encoding="utf-8")
+        print(f"created  {INITIAL}/synopsis.md")
+
+    config_p = initial_dir / "config.md"
+    if not config_p.exists():
+        title = getattr(args, "title", None) or "Untitled Novel"
+        config_p.write_text(f"# Project Configuration\n- **Title:** {title}\n- **Author:** Unknown\n- **Primary Locale:** en-US\n- **Target Locales:** [en-US]\n- **Target Words:** 80000\n- **Compilation:**\n  - **Include Glossary:** true\n  - **Include Foreword:** false\n", encoding="utf-8")
+        print(f"created  {INITIAL}/config.md")
 
     scaffold_dirs = (
         [f"{WORLD}/{w}" for w in WORLD_FOLDERS]
@@ -4943,7 +4943,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
     sub = ap.add_subparsers(dest="command")
     specs = [
-        ("init", "scaffold 9-stage directory structure and directives/ from templates"),
+        ("init", "scaffold 9-stage directory structure and directives/"),
         ("status", "dashboard across all 9 stages and directives"),
         ("check", "integrity checks across all 9 stages, Narrative DAG, serialization, and directives"),
         ("dag", "verify Stage 5 Narrative DAG and Stage 6 physical structure serialization"),
