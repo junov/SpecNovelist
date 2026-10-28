@@ -1,34 +1,144 @@
 # Stage Generation Reference & Record Schemas
 
-## 1. Stage 1 — Initial (`initial/`)
-- `initial/synopsis.md`: Seed narrative synopsis.
-- `initial/config.md`: Author identity, locales (`[primary]` marker), foreword path, glossary/bibliography toggles, publication metadata.
+## 1. Stage 1 — Initial (initial/)
+### initial/synopsis.md
+`markdown
+# Synopsis: <Title>
+## Premise
+<High-concept core dramatic hook and narrative premise>
 
-## 2. Stage 2 — Setup (`setup/`)
-- `setup/brief.md`: Premise, genre, target length, POV, setting eras, research rigor.
-- `setup/themes.md`:
-  ```markdown
-  ## THM-001: <Theme Title>
-  - **Central Question:** <Dramatic question>
-  - **Thesis / Antithesis:** <Tension>
-  - **Directives:** [[DIR-001]]
-  ```
-- `setup/style.md`: Voice, POV, rhythm, dialogue, anti-patterns, `## Glossary Guidelines`, `## Graphics Guidelines`, `## Publication & Book Design Guidelines`, and `# Locale: <locale>` sections.
+## Core Characters & Conflict
+<Protagonist, antagonist, key relationships, central stakes>
 
-## 3. Stage 3 — Research Questions (`research/questions.md`)
-```markdown
+## Plot Progression & Ending
+<Beginning, inciting turn, midpoint reversal, climax, resolution>
+`
+
+### initial/config.md
+`markdown
+# Project Configuration
+- **Title:** <Title>
+- **Author:** <Author Name>
+- **Primary Locale:** en-US
+- **Target Locales:** [en-US]
+- **Target Words:** 80000
+- **Compilation:**
+  - **Include Glossary:** true
+  - **Include Foreword:** false
+`
+
+## 2. Stage 2 — Setup (setup/)
+### setup/brief.md
+`markdown
+# Creative Brief: <Title>
+## Premise
+<Core narrative premise, high-concept elevator pitch, thematic hook>
+
+## Genre & Target Audience
+<Primary and secondary genres, age category, target readership>
+
+## Scope & Target Length
+<Word count target, volume structure, pacing milestones>
+
+## Narrative Stance & Point of View
+<POV format (e.g. third-person limited), narrative distance, tense>
+
+## Setting Overview
+<Primary era, geographic backdrop, sociopolitical backdrop, cultural atmosphere>
+
+## Central Conflict & Stakes
+<Central dramatic confrontation, personal vs societal stakes>
+
+## Tone & Content Boundaries
+<Dominant atmosphere, emotional palette, content boundaries>
+`
+
+### setup/themes.md
+`markdown
+# Thematic Pillars: <Title>
+## THM-001: <Theme Title>
+- **Central Question:** <Philosophical or dramatic dilemma>
+- **Thesis / Antithesis:** <Thematic tension or opposing viewpoints>
+- **Motifs & Symbols:** <Recurring imagery, metaphors, sensory elements>
+- **Directives:** [[DIR-001]]
+`
+
+### setup/style.md
+`markdown
+# Style Guide: <Title>
+## Core Aesthetic & Literary Stance
+<Prose voice anchor, literary influences, sentence rhythm and syntax style>
+
+## Perspective & Point of View Architecture
+<Rules for interiority, psychic distance transitions, POV discipline>
+
+## Sensory Palette & Textures
+<Dominant sensory textures, color palette, lighting, acoustic motifs>
+
+## Dialogue & Voice Conventions
+<Cadence, subtext rules, vernacular, dialect constraints>
+
+## Anti-Patterns & Prohibitions
+<Banned tropes, cliches, stylistic habits to strictly avoid>
+
+## Directives Preservation
+(Explicitly integrate and preserve [[DIR-001]] and all linked directives)
+
+## Publication & Book Design Guidelines
+<Typography choices, scene break ornaments, section dividers>
+
+## Graphics Guidelines
+<Visual style, medium, composition and lighting rules for illustrations>
+
+## Locale: en-US
+`
+
+## 3. Stage 3 — Research Questions (
+esearch/questions.md)
+`markdown
+# Research Questions: <Title>
 ## RQ-001: <Question Title>
 - **Status:** open
 - **Priority:** high
-- **Domain:** <history | science | geography | law | culture>
-- **Question:** <Detailed question>
-- **Context:** [[THM-001]]
-```
+- **Domain:** history | science | geography | law | culture | technology
+- **Question:** <Detailed factual inquiry requiring verification>
+- **Motivation:** <Why this question matters to narrative authenticity>
+- **Context:** [[THM-001]], [[brief.md]]
+`
 
-## 4. Stage 4 — World (`world/`)
-- `world/sources/SRC-NNN.md`: Author, Title, URL/Publication, Access Date, Reliability, Notes.
-- `world/facts/FCT-NNN.md`: Claim, Sources (`[[SRC-NNN]]`), Answers (`[[RQ-NNN]]`), Narrative Implications.
-- `world/characters/CHR-NNN.md`, `world/places/PLC-NNN.md`, `world/organizations/ORG-NNN.md`, `world/objects/OBJ-NNN.md`, `world/rules/WLD-NNN.md`, `world/timeline/TML-NNN.md`, `world/glossary/GLS-NNN.md`.
+## 4. Stage 4 — World (world/)
+### world/sources/SRC-NNN.md
+`markdown
+# SRC-001: <Source Title>
+- **Author:** <Author or Organization>
+- **Publication / URL:** <Citation or link>
+- **Access Date:** <Date>
+- **Reliability:** primary | peer-reviewed | secondary | reference
+- **Key Claims:** <Authoritative factual findings>
+`
+
+### world/facts/FCT-NNN.md
+`markdown
+# FCT-001: <Fact Title>
+- **Statement:** <Verifiable factual statement>
+- **Sources:** [[SRC-001]]
+- **Answers:** [[RQ-001]]
+- **Narrative Implications:** <Impact on story, world, or scenes>
+`
+
+### world/characters/CHR-NNN.md
+`markdown
+# CHR-001: <Character Name>
+- **Role:** protagonist | antagonist | deuteragonist | supporting
+- **Archetype:** <Dramatic archetype>
+- **Traits:** <Core personality traits>
+- **Internal Need vs External Want:** <Core psychological drive>
+- **Voice & Register:** <Speech cadence, vocabulary, verbal quirks>
+- **Relationships:** [[CHR-002]] (ally), [[CHR-003]] (rival)
+- **Directives:** [[DIR-001]]
+`
+
+- Additional entity types follow equivalent catalog structures in world/places/PLC-NNN.md, world/organizations/ORG-NNN.md, world/objects/OBJ-NNN.md, world/rules/WLD-NNN.md, world/timeline/TML-NNN.md, world/glossary/GLS-NNN.md.
 
 ## 5. Stage 5 — Narrative Structure (`narrative/`)
 ### Story Arcs (`narrative/arcs.md`)
