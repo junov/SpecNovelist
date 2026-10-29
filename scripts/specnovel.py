@@ -848,7 +848,12 @@ def derived_of(model: Model) -> Derived:
     for sid, s in model.defs.items():
         if s.prefix == "SCN":
             d.scenes[sid] = s
-            d.chapter_of[sid] = s.parent if s.parent and s.parent.startswith("CHP-") else None
+            chp = s.parent if s.parent and s.parent.startswith("CHP-") else None
+            if not chp and s.location and "CHP-" in s.location:
+                m = re.search(r"(CHP-\d+)", s.location)
+                if m:
+                    chp = m.group(1)
+            d.chapter_of[sid] = chp
         elif s.prefix == "CHP":
             d.chapters[sid] = s
     return d
