@@ -43,7 +43,7 @@ uv run python scripts/specnovel.py status
 uv run python scripts/specnovel.py delta --stage <stage>
 ```
 - If `delta --stage <stage>` reports that `<stage>` has not been generated yet (`Novel-Sync: <stage>` baseline is `None`), stop and invoke `novel-generate` for `<stage>`.
-- **Blank File Fallback**: If any target stage files for `<stage>` on disk are blank (0 bytes or contain only whitespace), even if a baseline commit exists, stop and delegate directly to `novel-generate` to synthesize the unpopulated stage files from upstream dependencies.
+- **Blank File Fallback**: If any target stage files for `<stage>` on disk are blank (0 bytes or contain only whitespace), even if a baseline commit exists, read the stage document schema from `novel-generate` and directly synthesize the unpopulated stage files from upstream dependencies using `write_file`.
 
 ### Step 2: Compute Downstream Impact
 For stages with fine-grained dependency tracking (`narrative`, `structure`, `abridged`, `manuscript`, `publishable`):

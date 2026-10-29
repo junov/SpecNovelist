@@ -3043,6 +3043,28 @@ def cmd_trace(git: Git, args) -> int:
     return 0
 
 
+def unpopulated_stage_files(stage: str) -> List[str]:
+    stage_file_map = {
+        INITIAL: ["initial/synopsis.md", "initial/config.md"],
+        SETUP: ["setup/brief.md", "setup/themes.md", "setup/style.md"],
+        RESEARCH: ["research/questions.md"],
+        NARRATIVE: ["narrative/arcs.md", "narrative/beats.md", "narrative/illustrations.md"],
+        STRUCTURE: ["structure/outline.md"],
+    }
+    unpopulated = []
+    for rel in stage_file_map.get(stage, []):
+        p = Path(rel)
+        if not p.is_file() or p.stat().st_size == 0:
+            unpopulated.append(rel)
+        else:
+            try:
+                if not p.read_text(encoding="utf-8", errors="replace").strip():
+                    unpopulated.append(rel)
+            except Exception:
+                unpopulated.append(rel)
+    return unpopulated
+
+
 def cmd_delta(git: Git, args) -> int:
     stage = args.stage
     base = git.baseline(stage)
@@ -3067,14 +3089,20 @@ def cmd_delta(git: Git, args) -> int:
         scope_desc = stage
 
     changes = diff_models(build_model(git.commit_md(base, *scope_dirs)), build_model(git.working_md(*scope_dirs)))
+    unpop = unpopulated_stage_files(stage)
     if args.json:
-        emit_json({"stage": stage, "baseline": base, "changes": [c.to_dict() for c in changes]})
+        emit_json({"stage": stage, "baseline": base, "changes": [c.to_dict() for c in changes], "unpopulated": unpop})
         return 0
     out = [f"# Delta for {scope_desc}", "", baseline_line(stage, git.commit_info(base)),
            f"Changes: {sum(1 for c in changes if c.kind == 'ADDED')} added, "
            f"{sum(1 for c in changes if c.kind == 'MODIFIED')} modified, "
            f"{sum(1 for c in changes if c.kind == 'REMOVED')} removed, "
            f"{sum(1 for c in changes if c.kind == 'MOVED')} moved", ""]
+    if unpop:
+        for u in unpop:
+            out.append(f"WARNING: {u} is empty (0 bytes) in working tree.")
+        out.append(f"Status: Stage '{stage}' has unpopulated files that require generation.")
+        out.append("")
     if not changes:
         out.append(f"No upstream changes for {stage} since this baseline.")
     for c in changes:
@@ -3108,6 +3136,9 @@ def cmd_impact(git: Git, args) -> int:
         raise NovelError(msg)
 
     imp = compute_impact(p, stage, locale=getattr(args, "locale", None), allow_uninitialized=getattr(args, "initial", False))
+    unpop = unpopulated_stage_files(stage)
+    if unpop:
+        imp["unpopulated"] = unpop
     if args.json:
         emit_json(imp)
         return 0
@@ -3128,6 +3159,11 @@ def cmd_impact(git: Git, args) -> int:
     if stage in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
         out = [f"# Impact on {stage}/", "", baseline_line(stage, imp.get("baseline")),
                f"Upstream changes since baseline: {len(imp['upstreamChanges'])}", ""]
+        if unpop:
+            for u in unpop:
+                out.append(f"WARNING: {u} is empty (0 bytes) in working tree.")
+            out.append(f"Status: Stage '{stage}' has unpopulated files that require generation.")
+            out.append("")
         if imp.get("records"):
             out.append(f"Records to synchronize ({len(imp['records'])}):")
             for r in imp["records"]:
