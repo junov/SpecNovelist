@@ -39,11 +39,11 @@ Use these structured checklists when conducting quality assurance across a 9-sta
 
 ---
 
-## 3. Fact Fidelity & Historical Accuracy Checklist (`research/` & `world/facts/`)
+## 3. Fact Fidelity & Historical Accuracy Checklist (`research/` & `facts/facts/`)
 
 - [ ] **Fact Citation**:
-  - Every historical or scientific claim in the novel traces back to a cataloged `[[FCT-...]]` item in `world/facts/`.
-  - Every fact has at least one authoritative, corroborated `[[SRC-...]]` in `world/sources/` and links to the `[[RQ-...]]` in `research/questions.md` it resolves.
+  - Every historical or scientific claim in the novel traces back to a cataloged `[[FCT-...]]` item in `facts/facts/`.
+  - Every fact has at least one authoritative, corroborated `[[SRC-...]]` in `facts/sources/` and links to the `[[RQ-...]]` in `research/questions.md` it resolves.
 - [ ] **Anachronism Review**:
   - No modern slang, idiom, or psychological jargon appears in historical dialogue or close-POV narration
     (e.g. *"closure", "trauma bonding", "prioritize", "reach out", "down to earth"*).

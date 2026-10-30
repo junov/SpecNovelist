@@ -32,7 +32,7 @@ description: >-
 
 ## Multi-Level Zoom-In Protocol
 
-The analysis report zooms in systematically across all 9 project stages:
+The analysis report zooms in systematically across all 10 project stages:
 1. **Narrative Structure (`narrative/` — `ARC-NNN`, `BET-NNN`, `ILL-NNN`)**:
    - Evaluates Narrative DAG momentum, story arc density, turning point distribution, and Chekhov gun setup/payoff distance gaps.
 2. **Physical Structure & Chapter Level (`structure/outline.md` — `VOL`, `ACT`, `CHP-NNN`)**:

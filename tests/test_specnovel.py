@@ -148,8 +148,9 @@ class ProjectTest(unittest.TestCase):
         self.write("world/characters/CHR-001-elena.md", CHAR)
         self.write("world/characters/CHR-002-karl.md", CHAR2)
         self.write("world/places/PLC-001-harbor.md", PLACE)
-        self.write("world/facts/shipping.md", FACTS)
-        self.write("world/sources/bibliography.md", SOURCES)
+        self.write("facts/facts/shipping.md", FACTS)
+        self.write("facts/sources/bibliography.md", SOURCES)
+        self.write("structure/back-matter/acknowledgements.md", "# Acknowledgements\n\n- Written with assistance from AI models.\n")
         self.write("narrative/arcs.md", ARCS)
         self.write("narrative/beats.md", BEATS)
         self.write("narrative/illustrations.md", ILLUSTRATIONS)
@@ -186,24 +187,19 @@ class ProjectTest(unittest.TestCase):
             self.assertEqual(res["errors"], [])
             self.assertEqual(code, 0)
 
-    def test_init_scaffolds_9_stages_and_directives(self):
+    def test_init_scaffolds_10_stages_and_directives(self):
         for rel in (
             "initial/synopsis.md",
             "initial/config.md",
-            "setup/brief.md",
-            "setup/themes.md",
-            "setup/style.md",
-            "research/questions.md",
-            "world/facts/.gitkeep",
-            "narrative/arcs.md",
-            "narrative/beats.md",
-            "narrative/illustrations.md",
-            "structure/outline.md",
+            "facts/facts/.gitkeep",
+            "facts/sources/.gitkeep",
+            "world/characters/.gitkeep",
+            "world/places/.gitkeep",
             "structure/back-matter/acknowledgements.md",
             "abridged/.gitkeep",
-            "manuscript/.gitkeep",
+            "manuscript/en-US/.gitkeep",
             "publishable/graphics/.gitkeep",
-            "directives/template.md",
+            "directives/.gitkeep",
         ):
             self.assertTrue((self.root / rel).exists(), rel)
         self.assertIn(".specnovel/", (self.root / ".gitignore").read_text())
@@ -214,7 +210,7 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(code, 0)
 
     def test_dangling_reference_and_unsourced_fact(self):
-        self.write("world/facts/more.md", "## FCT-002: Unsourced\n**Statement:** x [[PLC-009]]\n")
+        self.write("facts/facts/more.md", "## FCT-002: Unsourced\n**Statement:** x [[PLC-009]]\n")
         code, res = self.json_cli("check")
         self.assertEqual(code, 1)
         joined = "\n".join(res["errors"])
@@ -227,7 +223,7 @@ class ProjectTest(unittest.TestCase):
         self.assertTrue(any("duplicate ID CHR-001" in e for e in res["errors"]))
 
     def test_source_without_url_or_citation(self):
-        self.write("world/sources/bad.md", "## SRC-002: Mystery\n- **Type:** secondary\n")
+        self.write("facts/sources/bad.md", "## SRC-002: Mystery\n- **Type:** secondary\n")
         _, res = self.json_cli("check")
         self.assertTrue(any("SRC-002 has neither" in e for e in res["errors"]))
 
@@ -242,6 +238,25 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(self.run_cli("next-id", "CHR")[1].strip(), "CHR-003")
         self.assertEqual(self.run_cli("next-id", "TML")[1].strip(), "TML-001")
 
+
+    def test_facts_world_separation_and_prerequisite(self):
+        # 1. Storing facts under world/ must fail with clean break error
+        self.write("world/facts/legacy.md", "## FCT-099: Legacy fact\n**Statement:** test\n**Sources:** [[SRC-001]]\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("FCT-099 (fact) must be stored in 'facts/' but was found in 'world/facts/legacy.md'" in e for e in res["errors"]))
+        (self.root / "world/facts/legacy.md").unlink()
+
+        # 2. Open research question not resolved into facts must block world entities
+        self.write("research/questions.md", "# Research Questions\n\n## RQ-001: Unresolved harbor\n- **Status:** open\n- **Summary:** Unknown details.\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("unresolved research question(s) before world stage: RQ-001" in e for e in res["errors"]))
+
+        # 3. Resolving the research question in a fact satisfies prerequisite
+        self.write("facts/facts/shipping.md", FACTS + "\n**Resolves:** [[RQ-001]]\n")
+        code, res = self.json_cli("check")
+        self.assertEqual(code, 0, res)
     def test_trace(self):
         _, res = self.json_cli("trace", "PLC-001")
         self.assertEqual([s["id"] for s in res["scenes"]], ["SCN-001", "SCN-002", "SCN-003"])
@@ -278,7 +293,7 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(imp["scenes"], [])
 
         # Change a fact -> SCN-002 (and BET-002) references FCT-001
-        self.write("world/facts/shipping.md", FACTS.replace("Something true.", "Something else true."))
+        self.write("facts/facts/shipping.md", FACTS.replace("Something true.", "Something else true."))
         code, imp = self.json_cli("impact", "--stage", "abridged")
         self.assertEqual(code, 0)
         self.assertEqual([s["id"] for s in imp["scenes"]], ["SCN-002"])

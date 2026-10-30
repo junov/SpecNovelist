@@ -80,6 +80,7 @@ TRAILER = "Novel-Sync"
 INITIAL = "initial"
 SETUP = "setup"
 RESEARCH = "research"
+FACTS = "facts"
 WORLD = "world"
 NARRATIVE = "narrative"
 STRUCTURE = "structure"
@@ -92,18 +93,19 @@ STAGES = (
     INITIAL,      # Stage 1
     SETUP,        # Stage 2
     RESEARCH,     # Stage 3
-    WORLD,        # Stage 4
-    NARRATIVE,    # Stage 5
-    STRUCTURE,    # Stage 6
-    ABRIDGED,     # Stage 7
-    MANUSCRIPT,   # Stage 8
-    PUBLISHABLE,  # Stage 9
+    FACTS,        # Stage 4
+    WORLD,        # Stage 5
+    NARRATIVE,    # Stage 6
+    STRUCTURE,    # Stage 7
+    ABRIDGED,     # Stage 8
+    MANUSCRIPT,   # Stage 9
+    PUBLISHABLE,  # Stage 10
 )
 
-SPEC_STAGES = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE)
+SPEC_STAGES = (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE)
 DERIVED_STAGES = (ABRIDGED, MANUSCRIPT, PUBLISHABLE)
-PLAN_DIRS = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES)
-ALL_DIRS = (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, PUBLISHABLE, DIRECTIVES)
+PLAN_DIRS = (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES)
+ALL_DIRS = (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, PUBLISHABLE, DIRECTIVES)
 LAYERS = {"abridged": ABRIDGED, "manuscript": MANUSCRIPT}
 
 SYNOPSIS_FILE = "initial/synopsis.md"
@@ -124,6 +126,7 @@ STAGE_DIRS: Dict[str, Tuple[str, ...]] = {
     INITIAL: (INITIAL,),
     SETUP: (SETUP,),
     RESEARCH: (RESEARCH,),
+    FACTS: (FACTS,),
     WORLD: (WORLD,),
     NARRATIVE: (NARRATIVE,),
     STRUCTURE: (STRUCTURE,),
@@ -136,17 +139,19 @@ UPSTREAM_DIRS: Dict[str, Tuple[str, ...]] = {
     INITIAL: (INITIAL, DIRECTIVES),
     SETUP: (INITIAL, SETUP, DIRECTIVES),
     RESEARCH: (INITIAL, SETUP, DIRECTIVES),
-    WORLD: (INITIAL, SETUP, RESEARCH, DIRECTIVES),
-    NARRATIVE: (INITIAL, SETUP, RESEARCH, WORLD, DIRECTIVES),
-    STRUCTURE: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, DIRECTIVES),
-    ABRIDGED: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES),
-    MANUSCRIPT: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, DIRECTIVES),
-    PUBLISHABLE: (INITIAL, SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, DIRECTIVES),
+    FACTS: (INITIAL, SETUP, RESEARCH, DIRECTIVES),
+    WORLD: (INITIAL, SETUP, RESEARCH, FACTS, DIRECTIVES),
+    NARRATIVE: (INITIAL, SETUP, RESEARCH, FACTS, WORLD, DIRECTIVES),
+    STRUCTURE: (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, DIRECTIVES),
+    ABRIDGED: (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE, DIRECTIVES),
+    MANUSCRIPT: (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, DIRECTIVES),
+    PUBLISHABLE: (INITIAL, SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE, ABRIDGED, MANUSCRIPT, DIRECTIVES),
 }
 
 GENERATED = {"world/INDEX.md"}
+FACTS_FOLDERS = ("facts", "sources")
 WORLD_FOLDERS = (
-    "facts", "sources", "characters", "places", "organizations",
+    "characters", "places", "organizations",
     "objects", "rules", "timeline", "glossary"
 )
 
@@ -156,9 +161,10 @@ TYPES: "OrderedDict[str, str]" = OrderedDict([
     ("STY", "style rule"),
     # Stage 3: Research Questions
     ("RQ", "research question"),
-    # Stage 4: World
+    # Stage 4: Facts
     ("FCT", "fact"),
     ("SRC", "source"),
+    # Stage 5: World
     ("CHR", "character"),
     ("PLC", "place"),
     ("ORG", "organization"),
@@ -183,7 +189,8 @@ TYPES: "OrderedDict[str, str]" = OrderedDict([
 PREFIX_STAGE: Dict[str, str] = {
     "THM": SETUP, "STY": SETUP,
     "RQ": RESEARCH,
-    "FCT": WORLD, "SRC": WORLD, "CHR": WORLD, "PLC": WORLD,
+    "FCT": FACTS, "SRC": FACTS,
+    "CHR": WORLD, "PLC": WORLD,
     "ORG": WORLD, "OBJ": WORLD, "WLD": WORLD, "TML": WORLD, "GLS": WORLD,
     "ARC": NARRATIVE, "BET": NARRATIVE, "ILL": NARRATIVE,
     "VOL": STRUCTURE, "ACT": STRUCTURE, "PRT": STRUCTURE, "CHP": STRUCTURE, "SCN": STRUCTURE,
@@ -1938,12 +1945,12 @@ def scan_placeholders(p: Project, target_path: Optional[str] = None) -> List[Pla
             raise NovelError(f"Path not found: {target_path}")
     else:
         files = []
-        for d in (INITIAL, SETUP, WORLD, NARRATIVE, STRUCTURE):
+        for d in (INITIAL, SETUP, FACTS, WORLD, NARRATIVE, STRUCTURE):
             dp = root / d
             if dp.is_dir():
                 for f in dp.rglob("*.md"):
                     rel = f.relative_to(root).as_posix()
-                    if rel in GENERATED or rel.endswith("/template.md") or rel.startswith("world/sources/") or "/scenarios/" in rel or "/takes/" in rel:
+                    if rel in GENERATED or rel.endswith("/template.md") or rel.startswith("facts/sources/") or rel.startswith("world/sources/") or "/scenarios/" in rel or "/takes/" in rel:
                         continue
                     files.append(rel)
         files.sort()
@@ -2195,7 +2202,24 @@ def run_checks(p: Project, require: Sequence[str] = ()) -> Tuple[List[str], List
             if expected_stage and actual_top != expected_stage:
                 errors.append(f"{s.id} ({TYPES[s.prefix]}) must be stored in '{expected_stage}/' but was found in '{s.file}' ({s.location})")
 
-    # 3. Stage 3 & 4 (Research & World) integrity
+    # 3. Stage 3, 4 & 5 (Research, Facts & World) integrity
+    world_entities = (
+        list(plan.of_type("CHR")) + list(plan.of_type("PLC")) +
+        list(plan.of_type("ORG")) + list(plan.of_type("OBJ")) +
+        list(plan.of_type("WLD")) + list(plan.of_type("TML")) +
+        list(plan.of_type("GLS"))
+    )
+    if world_entities:
+        unresolved_rqs = [
+            rq for rq in plan.of_type("RQ")
+            if not any(rq.id in f.ref_ids() for f in plan.of_type("FCT"))
+        ]
+        if unresolved_rqs:
+            errors.append(
+                f"unresolved research question(s) before world stage: {', '.join(r.id for r in unresolved_rqs)} "
+                f"must be resolved into facts in '{FACTS}/' citing sources before world entities are generated"
+            )
+
     for s in plan.of_type("FCT"):
         if not any(r.startswith("SRC-") for r in s.ref_ids()):
             errors.append(f"fact {s.id} does not cite any [[SRC-...]] source ({s.location})")
@@ -2582,12 +2606,19 @@ def compute_impact(p: Project, stage: str, locale: Optional[str] = None, allow_u
 
         # Also check upstream additions that require new records in this stage
         unhandled_upstream = []
-        if stage == WORLD:
+        if stage == FACTS:
             for rq in plan.of_type("RQ"):
                 if rq.id in changed_ids or not any(rq.id in f.ref_ids() for f in plan.of_type("FCT")):
                     status_v = (rq.field_value("status") or "open").lower()
                     if status_v == "open":
                         unhandled_upstream.append(f"open research question {rq.id}: {rq.title}")
+        elif stage == WORLD:
+            open_rqs = [rq for rq in plan.of_type("RQ") if (rq.field_value("status") or "open").lower() == "open"]
+            unresolved = [rq for rq in open_rqs if not any(rq.id in f.ref_ids() for f in plan.of_type("FCT"))]
+            if unresolved:
+                unhandled_upstream.append(
+                    f"prerequisite: {len(unresolved)} research question(s) unresolved into facts before worldbuilding ({', '.join(r.id for r in unresolved)})"
+                )
         elif stage == STRUCTURE:
             for bid in nar.beats:
                 if bid not in o.beat_positions:
@@ -2722,11 +2753,36 @@ def cmd_init(root: Path, args) -> int:
     config_p = initial_dir / "config.md"
     if not config_p.exists():
         title = getattr(args, "title", None) or "Untitled Novel"
-        config_p.write_text(f"# Project Configuration\n- **Title:** {title}\n- **Author:** Unknown\n- **Primary Locale:** en-US\n- **Target Locales:** [en-US]\n- **Target Words:** 80000\n- **Compilation:**\n  - **Include Glossary:** true\n  - **Include Foreword:** false\n", encoding="utf-8")
+        config_p.write_text(
+            f"# Project Configuration\n- **Schema Version:** 2.0\n\n"
+            f"## Project\n- **Title:** {title}\n- **Edition:** 1.0.0\n\n"
+            f"## Author\n- **Name:** Author Name\n\n"
+            f"## Languages\n- **Primary:** en-US\n- **Targets:**\n  - en-US\n\n"
+            f"## Back Matter\n- **Include Glossary:** true\n- **Include Bibliography:** true\n- **Acknowledgements:** structure/back-matter/acknowledgements.md\n",
+            encoding="utf-8"
+        )
         print(f"created  {INITIAL}/config.md")
 
+    ack_p = git.root / ACKNOWLEDGEMENTS_FILE
+    if not ack_p.exists():
+        ack_p.parent.mkdir(parents=True, exist_ok=True)
+        ack_p.write_text("# Acknowledgements\n\n- Written with assistance from AI models.\n", encoding="utf-8")
+        print(f"created  {ACKNOWLEDGEMENTS_FILE}")
+
+    style_p = git.root / STYLE_FILE
+    if not style_p.exists():
+        style_p.parent.mkdir(parents=True, exist_ok=True)
+        style_p.write_text(
+            "# Writing Style Guide\n\n## Voice & Tone\nBalanced narrative voice.\n\n## Glossary Guidelines\n\n## Graphics Guidelines\n\n## Publication & Book Design Guidelines\n\n"
+            + ("style guidance " * 100).strip()
+            + "\n",
+            encoding="utf-8"
+        )
+        print(f"created  {STYLE_FILE}")
+
     scaffold_dirs = (
-        [f"{WORLD}/{w}" for w in WORLD_FOLDERS]
+        [f"{FACTS}/{f}" for f in FACTS_FOLDERS]
+        + [f"{WORLD}/{w}" for w in WORLD_FOLDERS]
         + [
             INITIAL, SETUP, RESEARCH, NARRATIVE, STRUCTURE,
             f"{STRUCTURE}/front-matter", f"{STRUCTURE}/back-matter",
@@ -2871,7 +2927,7 @@ def cmd_check(git: Git, args) -> int:
         print(f"CHECK FAILED - {len(errors)} error(s):")
         print("\n".join(f"  - {e}" for e in errors))
     else:
-        print("CHECK OK - All 9 stages, Narrative DAG, physical serialization, and directives are valid.")
+        print("CHECK OK - All 10 stages, Narrative DAG, physical serialization, and directives are valid.")
     if warnings:
         print(f"Warnings ({len(warnings)}):")
         print("\n".join(f"  - {w}" for w in warnings))
@@ -4984,10 +5040,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("-C", "--root", default=".", help="path inside the novel's git repository (default: cwd)")
     sub = ap.add_subparsers(dest="command")
     specs = [
-        ("init", "scaffold 9-stage directory structure and directives/"),
-        ("status", "dashboard across all 9 stages and directives"),
-        ("check", "integrity checks across all 9 stages, Narrative DAG, serialization, and directives"),
-        ("dag", "verify Stage 5 Narrative DAG and Stage 6 physical structure serialization"),
+        ("init", "scaffold 10-stage directory structure and directives/"),
+        ("status", "dashboard across all 10 stages and directives"),
+        ("check", "integrity checks across all 10 stages, Narrative DAG, serialization, and directives"),
+        ("dag", "verify Stage 6 Narrative DAG and Stage 7 physical structure serialization"),
         ("next-id", "allocate the next unused ID for a prefix"),
         ("trace", "where an ID is defined, referenced, used in beats, and scheduled in scenes"),
         ("delta", "upstream changes since a stage's baseline (requires stage generation)"),

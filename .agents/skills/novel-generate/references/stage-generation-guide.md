@@ -107,7 +107,7 @@ esearch/questions.md)
 `
 
 ## 4. Stage 4 — World (world/)
-### world/sources/SRC-NNN.md
+### facts/sources/SRC-NNN.md
 `markdown
 # SRC-001: <Source Title>
 - **Author:** <Author or Organization>
@@ -117,7 +117,7 @@ esearch/questions.md)
 - **Key Claims:** <Authoritative factual findings>
 `
 
-### world/facts/FCT-NNN.md
+### facts/facts/FCT-NNN.md
 `markdown
 # FCT-001: <Fact Title>
 - **Statement:** <Verifiable factual statement>

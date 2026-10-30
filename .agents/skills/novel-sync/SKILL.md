@@ -1,6 +1,6 @@
 ---
 name: novel-sync
-description: Category 2 (Synchronization) skill for SpecNovelist. Incrementally updates data for any of the 9 project stages (initial, setup, research, world, narrative, structure, abridged, manuscript, publishable) based on edits made to earlier stages. Enforces the Synchronization Generation Gate (cannot run until initial generation has been performed at least once for the target stage), respects and preserves existing [[DIR-NNN]] directives on updated records, automatically links relevant pre-existing directives to newly created records, and uses directives as a DRY factoring single source of truth.
+description: Category 2 (Synchronization) skill for SpecNovelist. Incrementally updates data for any of the 10 project stages (initial, setup, research, facts, world, narrative, structure, abridged, manuscript, publishable) based on edits made to earlier stages. Enforces the Synchronization Generation Gate (cannot run until initial generation has been performed at least once for the target stage), respects and preserves existing [[DIR-NNN]] directives on updated records, automatically links relevant pre-existing directives to newly created records, and uses directives as a DRY factoring single source of truth.
 ---
 
 # `novel-sync` — Incremental Stage Synchronization Engine

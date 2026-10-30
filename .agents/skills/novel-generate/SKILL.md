@@ -1,6 +1,6 @@
 ---
 name: novel-generate
-description: Category 1 (Generation) skill for SpecNovelist. Generates initial data for any of the 9 project stages (initial, setup, research, world, narrative, structure, abridged, manuscript, publishable) based on data from earlier stages and guided user interview questions. Automatically uses directives (DIR-NNN in directives/) as a DRY factoring single source of truth for instructions applied across multiple records, links relevant pre-existing directives to newly created records, and records the initial stage baseline via specnovel.py accept --stage <stage>.
+description: Category 1 (Generation) skill for SpecNovelist. Generates initial data for any of the 10 project stages (initial, setup, research, facts, world, narrative, structure, abridged, manuscript, publishable) based on data from earlier stages and guided user interview questions. Automatically uses directives (DIR-NNN in directives/) as a DRY factoring single source of truth for instructions applied across multiple records, links relevant pre-existing directives to newly created records, and records the initial stage baseline via specnovel.py accept --stage <stage>.
 ---
 
 # `novel-generate` — Stage Generation & Factoring Engine
@@ -91,7 +91,7 @@ See [`references/stage-generation-guide.md`](references/stage-generation-guide.m
 ### Stage 4: `world` (`world/`)
 1. **Resolve Research Questions into Sourced Facts**:
    - For each open `RQ-NNN` in `research/questions.md`, perform verifiable research (or consult authoritative sources).
-   - Create bibliographic source records (`SRC-NNN` in `world/sources/SRC-NNN.md`) and sourced facts (`FCT-NNN` in `world/facts/FCT-NNN.md`) citing `[[SRC-NNN]]`. Never create an `FCT` without at least one verified `SRC`.
+   - Create bibliographic source records (`SRC-NNN` in `facts/sources/SRC-NNN.md`) and sourced facts (`FCT-NNN` in `facts/facts/FCT-NNN.md`) citing `[[SRC-NNN]]`. Never create an `FCT` without at least one verified `SRC`.
    - Mark resolved questions `- **Status:** resolved ([[FCT-NNN]])` in `research/questions.md`.
 2. **Generate World Entities**:
    - Interview the author on cast, key locations, factions, objects, and world rules (offering decline/delegate options).

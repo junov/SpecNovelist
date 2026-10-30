@@ -9,7 +9,7 @@ description: >-
 
 # `novel-verify` — 9-Stage Continuity, Causality & Quality Assurance
 
-`novel-verify` is the diagnostic and quality-assurance engine of the SpecNovelist methodology. It audits alignment across all 9 project stages (`initial/`, `setup/`, `research/`, `world/`, `narrative/`, `structure/`, `abridged/`, `manuscript/`, `publishable/`) and the cross-stage `directives/` repository.
+`novel-verify` is the diagnostic and quality-assurance engine of the SpecNovelist methodology. It audits alignment across all 10 project stages (`initial/`, `setup/`, `research/`, `facts/`, `world/`, `narrative/`, `structure/`, `abridged/`, `manuscript/`, `publishable/`) and the cross-stage `directives/` repository.
 
 * **Verification checklists**: [audit-checklists.md](references/audit-checklists.md)
 * **Helper**: `uv run python scripts/specnovel.py <command>`
@@ -40,7 +40,7 @@ Verifies:
   - `structure/back-matter/acknowledgements.md` exists, is non-empty, and discloses all contributing AI models (`uv run python scripts/specnovel.py models`).
   - All cataloged IDs are unique (`THM`, `RQ`, `FCT`, `SRC`, `CHR`, `PLC`, `ORG`, `OBJ`, `WLD`, `TML`, `GLS`, `ARC`, `BET`, `ILL`, `VOL`, `ACT`, `CHP`, `SCN`, `DIR`).
   - No dangling wiki-links (`[[ID]]`) exist.
-  - All researched facts (`FCT` in `world/facts/`) cite valid source records (`SRC` in `world/sources/`).
+  - All researched facts (`FCT` in `facts/facts/`) cite valid source records (`SRC` in `facts/sources/`).
   - Derived chapters and scenes in `abridged/` and `manuscript/<locale>/` match `structure/outline.md` in order and hierarchy across all target locales.
   - Localized illustration assets in `publishable/graphics/` (`ILL-NNN.<locale>.png`) match manuscript links or fall back cleanly to `ILL-NNN.png`.
   - No raw `[[ID]]` markup or unresolved `[...]` placeholders leak into final `manuscript/` prose.
@@ -71,7 +71,7 @@ uv run python scripts/specnovel.py trace DIR-001
 ---
 
 ## 3. Fact & Style Compliance Audit
-- **Fact Fidelity**: Verify that scenes and beats referencing `[[FCT-NNN]]` honor the claim and sources in `world/facts/` and `world/sources/`.
+- **Fact Fidelity**: Verify that scenes and beats referencing `[[FCT-NNN]]` honor the claim and sources in `facts/facts/` and `facts/sources/`.
 - **Style & Directive Compliance**: Audit `manuscript/<locale>/` against `setup/style.md` (`# Locale: <locale>`) and all active `directives/DIR-NNN.md` linked to each chapter, scene, beat, or character.
 
 ---
