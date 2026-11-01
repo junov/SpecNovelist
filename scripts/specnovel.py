@@ -2580,8 +2580,8 @@ def compute_impact(p: Project, stage: str, locale: Optional[str] = None, allow_u
         ill_imp["upstreamChanges"] = [c.label() for c in changes]
         return ill_imp
 
-    # For Stages 2-6 (spec stages: setup, research, world, narrative, structure)
-    if stage in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+    # For Stages 2-6 (spec stages: setup, research, facts, world, narrative, structure)
+    if stage in (SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE):
         stage_records = [s for s in plan.defs.values() if stage_of_section(s) == stage]
         impacted_records = []
         for sec in stage_records:
@@ -2904,7 +2904,7 @@ def next_step(p: Project, impacts: dict, pub_impact: dict, errors: List[str], dr
             return f"novel-generate: generate stage '{st}' and run 'accept --stage {st}'"
         if st in SPEC_STAGES and drift and drift.get(st):
             return f"accept or sync: stage '{st}' has uncommitted edits — run 'accept --stage {st}'"
-        if st in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+        if st in (SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE):
             st_imp = compute_impact(p, st, allow_uninitialized=True)
             if st_imp.get("records") or st_imp.get("unhandledUpstream"):
                 return f"novel-sync: synchronize stage '{st}' with upstream changes"
@@ -3217,7 +3217,7 @@ def cmd_impact(git: Git, args) -> int:
         print("\n".join(out))
         return 0
 
-    if stage in (SETUP, RESEARCH, WORLD, NARRATIVE, STRUCTURE):
+    if stage in (SETUP, RESEARCH, FACTS, WORLD, NARRATIVE, STRUCTURE):
         out = [f"# Impact on {stage}/", "", baseline_line(stage, imp.get("baseline")),
                f"Upstream changes since baseline: {len(imp['upstreamChanges'])}", ""]
         if unpop:
