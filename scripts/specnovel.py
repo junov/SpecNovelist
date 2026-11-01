@@ -3011,30 +3011,112 @@ def cmd_dag(git: Git, args) -> int:
     return 1 if all_errors else 0
 
 
+class FileLock:
+    """Inter-process file lock using OS-level file locking.
+    @spec AGT-016
+    """
+    def __init__(self, lock_file: Path, timeout: float = 5.0, poll_interval: float = 0.05):
+        self.lock_file = lock_file
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self._fd = None
+
+    def __enter__(self):
+        start = time.time()
+        self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+        if not self.lock_file.exists() or self.lock_file.stat().st_size == 0:
+            try:
+                self.lock_file.write_bytes(b"0")
+            except Exception:
+                pass
+        while True:
+            try:
+                self._fd = open(self.lock_file, "r+b")
+                if os.name == "nt":
+                    import msvcrt
+                    self._fd.seek(0)
+                    msvcrt.locking(self._fd.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self._fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except (BlockingIOError, PermissionError, OSError):
+                if self._fd:
+                    try:
+                        self._fd.close()
+                    except Exception:
+                        pass
+                    self._fd = None
+                if time.time() - start >= self.timeout:
+                    raise NovelError(f"Timeout waiting for ID allocation lock: {self.lock_file}")
+                time.sleep(self.poll_interval)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._fd:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    self._fd.seek(0)
+                    msvcrt.locking(self._fd.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self._fd.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+            finally:
+                try:
+                    self._fd.close()
+                except Exception:
+                    pass
+                self._fd = None
+
+
 def allocate_next_ids(git: Git, prefix: str, count: int = 1) -> List[str]:
+    # @spec AGT-016: Atomic Entity ID Allocation via Inter-Process Locking
     prefix = prefix.upper()
     if not re.fullmatch(r"[A-Z][A-Z0-9]*", prefix):
         raise NovelError("Prefix must be uppercase letters/digits, e.g. CHR, BET, SCN, DIR")
-    rx = re.compile(rf"^#{{1,6}}\s+{prefix}-(\d+)\b")
-    lines: List[str] = []
-    for rel, text in git.working_md(*ALL_DIRS).items():
-        if rel.endswith("/template.md"):
-            continue
-        lines += COMMENT_RE.sub("", text).splitlines()
-    if git.has_commits():
-        raw_patch = git.run("log", "--all", "--format=", "-p", f"-S{prefix}-") or ""
-        cleaned_patch_lines = []
-        for pl in raw_patch.splitlines():
-            if pl.startswith(("+++", "---", "diff ", "index ", "@@")):
+
+    lock_file = git.root / ".agents" / "allocations.lock"
+    ledger_file = git.root / ".agents" / "allocated_ids.json"
+
+    with FileLock(lock_file):
+        rx = re.compile(rf"^#{{1,6}}\s+{prefix}-(\d+)\b")
+        lines: List[str] = []
+        for rel, text in git.working_md(*ALL_DIRS).items():
+            if rel.endswith("/template.md"):
                 continue
-            if pl and pl[0] in ("+", "-", " "):
-                cleaned_patch_lines.append(pl[1:])
-            else:
-                cleaned_patch_lines.append(pl)
-        lines += COMMENT_RE.sub("", "\n".join(cleaned_patch_lines)).splitlines()
-    nums = [int(m.group(1)) for m in map(rx.match, lines) if m]
-    start = (max(nums) if nums else 0) + 1
-    return [f"{prefix}-{n:03d}" for n in range(start, start + count)]
+            lines += COMMENT_RE.sub("", text).splitlines()
+        if git.has_commits():
+            raw_patch = git.run("log", "--all", "--format=", "-p", f"-S{prefix}-") or ""
+            cleaned_patch_lines = []
+            for pl in raw_patch.splitlines():
+                if pl.startswith(("+++", "---", "diff ", "index ", "@@")):
+                    continue
+                if pl and pl[0] in ("+", "-", " "):
+                    cleaned_patch_lines.append(pl[1:])
+                else:
+                    cleaned_patch_lines.append(pl)
+            lines += COMMENT_RE.sub("", "\n".join(cleaned_patch_lines)).splitlines()
+        nums = [int(m.group(1)) for m in map(rx.match, lines) if m]
+        max_existing = max(nums) if nums else 0
+
+        ledger: Dict[str, int] = {}
+        if ledger_file.is_file():
+            try:
+                ledger = json.loads(ledger_file.read_text(encoding="utf-8"))
+            except Exception:
+                ledger = {}
+
+        ledger_max = int(ledger.get(prefix, 0))
+        start = max(max_existing, ledger_max) + 1
+        allocated = [f"{prefix}-{n:03d}" for n in range(start, start + count)]
+
+        ledger[prefix] = start + count - 1
+        ledger_file.parent.mkdir(parents=True, exist_ok=True)
+        ledger_file.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
+
+        return allocated
 
 
 def cmd_next_id(git: Git, args) -> int:
